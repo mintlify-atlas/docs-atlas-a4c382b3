@@ -1,0 +1,333 @@
+---
+title: certs
+description: Manage SSL/TLS certificates for your Convox rack
+---
+
+The `certs` command group provides tools for managing SSL/TLS certificates on your Convox rack. You can list, generate, import, delete, and renew certificates, as well as configure Let's Encrypt DNS solvers.
+
+## certs
+
+List all certificates on the rack.
+
+### Usage
+
+```bash
+convox certs
+```
+
+### Flags
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+<ParamField path="--watch" type="string">
+  Watch interval for continuous updates
+</ParamField>
+
+### Example Output
+
+```bash
+$ convox certs
+ID              DOMAIN              EXPIRES       STATUS
+cert-abc123     example.com         2 months      Ready
+cert-xyz789     *.myapp.com         1 year        Ready
+```
+
+## certs delete
+
+Delete a certificate from the rack.
+
+### Usage
+
+```bash
+convox certs delete <cert>
+```
+
+### Arguments
+
+<ParamField path="cert" type="string" required>
+  Certificate ID to delete
+</ParamField>
+
+### Flags
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+### Example
+
+```bash
+$ convox certs delete cert-abc123
+Deleting certificate cert-abc123... OK
+```
+
+<Warning>
+  Deleting a certificate that is in use by an application will cause SSL/TLS errors. Make sure to update your application configuration before deleting.
+</Warning>
+
+## certs generate
+
+Generate a new certificate using Let's Encrypt.
+
+### Usage
+
+```bash
+convox certs generate <domain> [domain...]
+```
+
+### Arguments
+
+<ParamField path="domain" type="string" required>
+  One or more domain names for the certificate
+</ParamField>
+
+### Flags
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+<ParamField path="--id" type="boolean">
+  Output only the certificate ID
+</ParamField>
+
+### Example
+
+```bash
+$ convox certs generate example.com www.example.com
+Generating certificate... OK, cert-abc123
+```
+
+<Note>
+  Let's Encrypt certificates are automatically renewed before expiration.
+</Note>
+
+## certs import
+
+Import an existing SSL/TLS certificate.
+
+### Usage
+
+```bash
+convox certs import <pub> <key>
+```
+
+### Arguments
+
+<ParamField path="pub" type="string" required>
+  Path to the public certificate file
+</ParamField>
+
+<ParamField path="key" type="string" required>
+  Path to the private key file
+</ParamField>
+
+### Flags
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+<ParamField path="--chain" type="string">
+  Path to the intermediate certificate chain file
+</ParamField>
+
+<ParamField path="--id" type="boolean">
+  Output only the certificate ID
+</ParamField>
+
+### Example
+
+```bash
+$ convox certs import cert.pem key.pem --chain chain.pem
+Importing certificate... OK, cert-xyz789
+```
+
+## certs renew
+
+Renew a certificate for an application.
+
+### Usage
+
+```bash
+convox certs renew
+```
+
+### Flags
+
+<ParamField path="--app" type="string">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+### Example
+
+```bash
+$ convox certs renew
+Renewing certificate myapp... OK
+```
+
+## letsencrypt dns route53 add
+
+Configure a Let's Encrypt DNS Route53 solver.
+
+### Usage
+
+```bash
+convox letsencrypt dns route53 add
+```
+
+### Flags
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+<ParamField path="--id" type="integer" required>
+  DNS solver ID
+</ParamField>
+
+<ParamField path="--dns-zones" type="string">
+  Comma-separated DNS zones
+</ParamField>
+
+<ParamField path="--hosted-zone-id" type="string">
+  AWS Route53 hosted zone ID
+</ParamField>
+
+<ParamField path="--role" type="string">
+  AWS IAM role ARN to assume for accessing DNS zones
+</ParamField>
+
+<ParamField path="--region" type="string">
+  AWS region
+</ParamField>
+
+### Example
+
+```bash
+$ convox letsencrypt dns route53 add --id 1 --dns-zones example.com --hosted-zone-id Z1234567890ABC --role arn:aws:iam::123456789012:role/dns-solver --region us-east-1
+OK
+```
+
+## letsencrypt dns route53 update
+
+Update a Let's Encrypt DNS Route53 solver.
+
+### Usage
+
+```bash
+convox letsencrypt dns route53 update
+```
+
+### Flags
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+<ParamField path="--id" type="integer" required>
+  DNS solver ID to update
+</ParamField>
+
+<ParamField path="--dns-zones" type="string">
+  Comma-separated DNS zones
+</ParamField>
+
+<ParamField path="--hosted-zone-id" type="string">
+  AWS Route53 hosted zone ID
+</ParamField>
+
+<ParamField path="--role" type="string">
+  AWS IAM role ARN to assume for accessing DNS zones
+</ParamField>
+
+<ParamField path="--region" type="string">
+  AWS region
+</ParamField>
+
+### Example
+
+```bash
+$ convox letsencrypt dns route53 update --id 1 --dns-zones example.com,api.example.com
+OK
+```
+
+## letsencrypt dns route53 delete
+
+Delete a Let's Encrypt DNS Route53 solver.
+
+### Usage
+
+```bash
+convox letsencrypt dns route53 delete
+```
+
+### Flags
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+<ParamField path="--id" type="integer" required>
+  DNS solver ID to delete
+</ParamField>
+
+### Example
+
+```bash
+$ convox letsencrypt dns route53 delete --id 1
+OK
+```
+
+## letsencrypt dns route53 list
+
+List all Let's Encrypt DNS Route53 solvers.
+
+### Usage
+
+```bash
+convox letsencrypt dns route53 list
+```
+
+### Flags
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+### Example Output
+
+```bash
+$ convox letsencrypt dns route53 list
+ID  DNS-ZONES                   HOSTED-ZONE-ID      REGION      ROLE
+1   example.com,*.example.com   Z1234567890ABC      us-east-1   arn:aws:iam::123456789012:role/dns-solver
+```
+
+## letsencrypt dns route53 role
+
+Display the Let's Encrypt DNS Route53 role ARN.
+
+### Usage
+
+```bash
+convox letsencrypt dns route53 role
+```
+
+### Flags
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+### Example Output
+
+```bash
+$ convox letsencrypt dns route53 role
+arn:aws:iam::123456789012:role/convox-letsencrypt-dns
+```

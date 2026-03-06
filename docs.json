@@ -130,16 +130,24 @@
             "pages": [
               "cli/overview",
               "cli/apps",
+              "cli/balancers",
               "cli/build",
+              "cli/certs",
               "cli/deploy",
               "cli/env",
+              "cli/exec",
+              "cli/instances",
               "cli/logs",
               "cli/ps",
               "cli/rack",
+              "cli/registries",
+              "cli/releases",
+              "cli/resources",
               "cli/run",
               "cli/scale",
               "cli/services",
-              "cli/resources"
+              "cli/ssl",
+              "cli/workflows"
             ]
           }
         ]

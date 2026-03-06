@@ -1,0 +1,81 @@
+---
+title: ssl
+description: Manage SSL/TLS certificates for application services
+---
+
+The `ssl` command group provides tools for managing SSL/TLS certificate assignments to your application services. This allows you to associate certificates with specific service ports.
+
+## ssl
+
+List SSL/TLS certificate associations for an application.
+
+### Usage
+
+```bash
+convox ssl
+```
+
+### Flags
+
+<ParamField path="--app" type="string">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+### Example Output
+
+```bash
+$ convox ssl
+ENDPOINT    CERTIFICATE      DOMAIN           EXPIRES
+web:443     cert-abc123      example.com      2 months
+api:443     cert-xyz789      api.example.com  1 year
+```
+
+<Note>
+  This command shows which certificates are currently associated with each service endpoint.
+</Note>
+
+## ssl update
+
+Update the certificate for a specific service port.
+
+### Usage
+
+```bash
+convox ssl update <process:port> <certificate>
+```
+
+### Arguments
+
+<ParamField path="process:port" type="string" required>
+  Service name and port number in the format `service:port`
+</ParamField>
+
+<ParamField path="certificate" type="string" required>
+  Certificate ID to assign to the service port
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+### Example
+
+```bash
+$ convox ssl update web:443 cert-abc123
+Updating certificate...
+OK
+```
+
+<Warning>
+  This command is only valid for generation 1 applications. For generation 2 and later, certificates are managed via the application manifest (convox.yml).
+</Warning>

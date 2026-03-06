@@ -1,0 +1,77 @@
+---
+title: workflows
+description: Manage and execute Convox workflows
+---
+
+The `workflows` command group provides tools for managing and running workflows in Convox. Workflows automate deployment pipelines and custom processes for your applications.
+
+## workflows
+
+List all available workflows for the current rack.
+
+### Usage
+
+```bash
+convox workflows
+```
+
+### Flags
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+### Example Output
+
+```bash
+$ convox workflows
+ID      KIND      NAME
+1       deploy    Production Deploy
+2       review    Review App
+3       custom    Database Migration
+```
+
+## workflows run
+
+Trigger a workflow for a specific branch or commit.
+
+### Usage
+
+```bash
+convox workflows run <id>
+```
+
+### Arguments
+
+<ParamField path="id" type="string" required>
+  Workflow ID to execute
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string" required>
+  Application name
+</ParamField>
+
+<ParamField path="--branch" type="string">
+  Git branch to run the workflow for
+</ParamField>
+
+<ParamField path="--commit" type="string">
+  Git commit SHA to run the workflow for
+</ParamField>
+
+### Example
+
+```bash
+$ convox workflows run 1 --app myapp --branch main
+Successfully trigger the workflow, job id: job-abc123
+```
+
+<Note>
+  You must specify either `--branch` or `--commit` when running a workflow.
+</Note>
+
+<Card title="Workflow Configuration" icon="gear">
+  Workflows are typically configured in your Convox Console or via workflow configuration files in your repository.
+</Card>

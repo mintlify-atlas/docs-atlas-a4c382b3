@@ -1,0 +1,268 @@
+---
+title: releases
+description: Manage application releases and deployments
+---
+
+The `releases` command group provides tools for managing releases of your Convox applications. Releases represent immutable versions of your application code and configuration that can be promoted to production or rolled back.
+
+## releases
+
+List all releases for an application.
+
+### Usage
+
+```bash
+convox releases
+```
+
+### Flags
+
+<ParamField path="--app" type="string">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+<ParamField path="--limit" type="integer">
+  Maximum number of releases to return
+</ParamField>
+
+<ParamField path="--watch" type="string">
+  Watch interval for continuous updates
+</ParamField>
+
+### Example Output
+
+```bash
+$ convox releases
+ID              STATUS   BUILD           CREATED      DESCRIPTION
+RABCDEFGHI      active   BABCDEFGHI      2 hours      Deploy via CLI
+RIHGFEDCBA              BABCDEFGHI      5 hours      Updated environment
+RJKLMNOPQR              BJKLMNOPQR      1 day        Initial release
+```
+
+<Note>
+  The release marked as "active" is the currently running version of your application.
+</Note>
+
+## releases create-from
+
+Create a new release by combining the build from one release with the environment from another.
+
+### Usage
+
+```bash
+convox releases create-from
+```
+
+### Flags
+
+<ParamField path="--app" type="string">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+<ParamField path="--build-from" type="string">
+  Release ID to use for the build
+</ParamField>
+
+<ParamField path="--use-active-release-build" type="boolean">
+  Use the build from the currently active release
+</ParamField>
+
+<ParamField path="--env-from" type="string">
+  Release ID to use for the environment
+</ParamField>
+
+<ParamField path="--use-active-release-env" type="boolean">
+  Use the environment from the currently active release
+</ParamField>
+
+<ParamField path="--promote" type="boolean">
+  Automatically promote the new release after creation
+</ParamField>
+
+### Example
+
+```bash
+$ convox releases create-from --build-from RABCDEFGHI --env-from RIHGFEDCBA
+Using build from release: RABCDEFGHI
+Using env from release: RIHGFEDCBA
+Created release: RNEWRELEAS
+OK
+```
+
+<Note>
+  You must specify either `--build-from` or `--use-active-release-build`, and either `--env-from` or `--use-active-release-env`.
+</Note>
+
+## releases info
+
+Display detailed information about a specific release.
+
+### Usage
+
+```bash
+convox releases info <release>
+```
+
+### Arguments
+
+<ParamField path="release" type="string" required>
+  Release ID
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+### Example Output
+
+```bash
+$ convox releases info RABCDEFGHI
+Id           RABCDEFGHI
+Build        BABCDEFGHI
+Created      2024-03-06T10:30:00Z
+Description  Deploy via CLI
+Env          EABCDEFGHI
+```
+
+## releases manifest
+
+Display the manifest (convox.yml) for a specific release.
+
+### Usage
+
+```bash
+convox releases manifest <release>
+```
+
+### Arguments
+
+<ParamField path="release" type="string" required>
+  Release ID
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+### Example Output
+
+```bash
+$ convox releases manifest RABCDEFGHI
+services:
+  web:
+    build: .
+    port: 3000
+    environment:
+      - NODE_ENV=production
+```
+
+## releases promote
+
+Promote a release to become the active version of your application.
+
+### Usage
+
+```bash
+convox releases promote [release]
+```
+
+### Arguments
+
+<ParamField path="release" type="string">
+  Release ID to promote (defaults to the most recent release if not specified)
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+<ParamField path="--force" type="boolean">
+  Skip waiting for app to be ready before promoting
+</ParamField>
+
+### Example
+
+```bash
+$ convox releases promote RABCDEFGHI
+Promoting RABCDEFGHI...
+...
+OK
+```
+
+<Warning>
+  Promoting a release will update your running application. Make sure you've tested the release before promoting to production.
+</Warning>
+
+## releases rollback
+
+Rollback to a previous release by creating a new release with the same build and environment.
+
+### Usage
+
+```bash
+convox releases rollback <release>
+```
+
+### Arguments
+
+<ParamField path="release" type="string" required>
+  Release ID to rollback to
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+<ParamField path="--id" type="boolean">
+  Output only the new release ID
+</ParamField>
+
+<ParamField path="--force" type="boolean">
+  Skip waiting for app to be ready before promoting
+</ParamField>
+
+### Example
+
+```bash
+$ convox releases rollback RIHGFEDCBA
+Rolling back to RIHGFEDCBA... OK, RNEWRELEAS
+Promoting RNEWRELEAS...
+...
+OK
+```
+
+<Note>
+  Rollback creates a new release (copying the old one) rather than reverting in place. This preserves the complete release history.
+</Note>

@@ -1,0 +1,149 @@
+---
+title: instances
+description: Manage rack instances and infrastructure
+---
+
+The `instances` command group provides tools for managing the underlying instances (servers) that make up your Convox rack. You can list instances, SSH into them, terminate them, and rotate SSH keys.
+
+## instances
+
+List all instances in the rack.
+
+### Usage
+
+```bash
+convox instances
+```
+
+### Flags
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+<ParamField path="--watch" type="string">
+  Watch interval for continuous updates
+</ParamField>
+
+### Example Output
+
+```bash
+$ convox instances
+ID                  STATUS   STARTED      PS   CPU    MEM    PUBLIC            PRIVATE
+i-0abc123def456     running  2 hours      12   45%    62%    54.123.45.67      10.0.1.23
+i-0xyz789ghi012     running  2 hours      8    32%    48%    54.123.45.68      10.0.1.24
+```
+
+<Note>
+  The CPU and MEM columns show utilization as a percentage of allocatable resources.
+</Note>
+
+## instances keyroll
+
+Rotate the SSH key pair used for instance access.
+
+### Usage
+
+```bash
+convox instances keyroll
+```
+
+### Flags
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+### Example
+
+```bash
+$ convox instances keyroll
+Rolling instance key...
+Updating parameters...
+OK
+Generated private key:
+-----BEGIN RSA PRIVATE KEY-----
+...
+-----END RSA PRIVATE KEY-----
+```
+
+<Warning>
+  Save the generated private key in a secure location. You will need it to SSH into instances.
+</Warning>
+
+## instances ssh
+
+Open an SSH shell on a specific instance.
+
+### Usage
+
+```bash
+convox instances ssh <instance-id> [command]
+```
+
+### Arguments
+
+<ParamField path="instance-id" type="string" required>
+  Instance ID to connect to
+</ParamField>
+
+<ParamField path="command" type="string">
+  Optional command to execute on the instance
+</ParamField>
+
+### Flags
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+<ParamField path="--key" type="string">
+  Path to private key file (required for v3 racks)
+</ParamField>
+
+### Example
+
+```bash
+$ convox instances ssh i-0abc123def456
+# Opens an interactive shell on the instance
+
+$ convox instances ssh i-0abc123def456 "docker ps"
+# Runs a specific command and returns output
+```
+
+<Note>
+  For v3 racks, you must provide a private key file using the `--key` flag.
+</Note>
+
+## instances terminate
+
+Terminate a specific instance.
+
+### Usage
+
+```bash
+convox instances terminate <instance-id>
+```
+
+### Arguments
+
+<ParamField path="instance-id" type="string" required>
+  Instance ID to terminate
+</ParamField>
+
+### Flags
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+### Example
+
+```bash
+$ convox instances terminate i-0abc123def456
+Terminating instance... OK
+```
+
+<Warning>
+  The rack will automatically replace terminated instances to maintain desired capacity. Only terminate instances that are experiencing issues.
+</Warning>

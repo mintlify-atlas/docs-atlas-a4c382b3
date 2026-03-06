@@ -1,0 +1,43 @@
+---
+title: balancers
+description: Manage load balancers for your Convox application
+---
+
+The `balancers` command displays load balancer information for an application, showing the balancer names, associated services, and their endpoints.
+
+## balancers
+
+List all load balancers for an application.
+
+### Usage
+
+```bash
+convox balancers
+```
+
+### Flags
+
+<ParamField path="--app" type="string">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+<ParamField path="--watch" type="string">
+  Watch interval for continuous updates
+</ParamField>
+
+### Example Output
+
+```bash
+$ convox balancers
+BALANCER          SERVICE  ENDPOINT
+web-balancer      web      https://web-abc123.us-east-1.elb.amazonaws.com
+api-balancer      api      https://api-xyz789.us-east-1.elb.amazonaws.com
+```
+
+<Note>
+  Load balancers are automatically created for services that expose ports in your application manifest.
+</Note>

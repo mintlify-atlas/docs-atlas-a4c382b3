@@ -1,0 +1,109 @@
+---
+title: registries
+description: Manage private Docker registries for your Convox rack
+---
+
+The `registries` command group provides tools for managing private Docker registry credentials on your Convox rack. This allows you to pull images from private registries during builds and deployments.
+
+## registries
+
+List all configured private registries.
+
+### Usage
+
+```bash
+convox registries
+```
+
+### Flags
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+<ParamField path="--watch" type="string">
+  Watch interval for continuous updates
+</ParamField>
+
+### Example Output
+
+```bash
+$ convox registries
+SERVER                          USERNAME
+registry.example.com            myuser
+123456789012.dkr.ecr.us-east-1  AWS
+```
+
+## registries add
+
+Add credentials for a private Docker registry.
+
+### Usage
+
+```bash
+convox registries add <server> <username> <password>
+```
+
+### Arguments
+
+<ParamField path="server" type="string" required>
+  Registry server hostname (e.g., registry.example.com)
+</ParamField>
+
+<ParamField path="username" type="string" required>
+  Registry username
+</ParamField>
+
+<ParamField path="password" type="string" required>
+  Registry password or access token
+</ParamField>
+
+### Flags
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+### Example
+
+```bash
+$ convox registries add registry.example.com myuser mypassword
+Adding registry... OK
+```
+
+<Note>
+  For AWS ECR, you can use an IAM access key ID as the username and secret access key as the password, or configure IAM roles for better security.
+</Note>
+
+## registries remove
+
+Remove a private registry configuration.
+
+### Usage
+
+```bash
+convox registries remove <server>
+```
+
+### Arguments
+
+<ParamField path="server" type="string" required>
+  Registry server hostname to remove
+</ParamField>
+
+### Flags
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+### Example
+
+```bash
+$ convox registries remove registry.example.com
+Removing registry... OK
+```
+
+<Warning>
+  After removing registry credentials, builds and deployments that depend on images from that registry will fail.
+</Warning>

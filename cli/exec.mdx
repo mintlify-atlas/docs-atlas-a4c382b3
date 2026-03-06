@@ -1,0 +1,61 @@
+---
+title: exec
+description: Execute commands in running application processes
+---
+
+The `exec` command allows you to run commands inside a running process container, similar to `docker exec`. This is useful for debugging, running one-off tasks, or inspecting the runtime environment.
+
+## exec
+
+Execute a command in a running process.
+
+### Usage
+
+```bash
+convox exec <pid> <command>
+```
+
+### Arguments
+
+<ParamField path="pid" type="string" required>
+  Process ID of the running container
+</ParamField>
+
+<ParamField path="command" type="string" required>
+  Command to execute inside the process
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+### Example
+
+```bash
+$ convox ps
+ID            SERVICE  STATUS   RELEASE     STARTED      COMMAND
+0123456789ab  web      running  RABCDEFGHI  2 hours ago  bin/web
+
+$ convox exec 0123456789ab bash
+# Opens an interactive bash shell inside the container
+
+$ convox exec 0123456789ab rails console
+# Opens a Rails console
+
+$ convox exec 0123456789ab "ls -la /app"
+# Lists files in the /app directory
+```
+
+<Note>
+  The command runs in the same environment as your application process, with access to all environment variables and mounted volumes.
+</Note>
+
+<Warning>
+  Changes made via `exec` are not persisted. Any modifications to the filesystem will be lost when the process restarts.
+</Warning>
