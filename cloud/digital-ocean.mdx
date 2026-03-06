@@ -1,0 +1,632 @@
+---
+title: "Digital Ocean"
+description: "Install and configure Convox on Digital Ocean with DOKS"
+---
+
+# Digital Ocean
+
+Deploy Convox on Digital Ocean using Digital Ocean Kubernetes Service (DOKS) for a developer-friendly, cost-effective Kubernetes platform.
+
+<Note>
+The easiest way to install a Rack is with the [Convox Web Console](https://console.convox.com). These instructions are for command-line installation.
+</Note>
+
+## Prerequisites
+
+Before installing Convox on Digital Ocean, ensure you have the following tools installed:
+
+<Steps>
+  <Step title="Install Terraform">
+    Convox uses Terraform to provision Digital Ocean infrastructure.
+    
+    ```bash
+    # macOS
+    brew tap hashicorp/tap
+    brew install hashicorp/tap/terraform
+    
+    # Linux
+    wget https://releases.hashicorp.com/terraform/1.6.0/terraform_1.6.0_linux_amd64.zip
+    unzip terraform_1.6.0_linux_amd64.zip
+    sudo mv terraform /usr/local/bin/
+    
+    # Verify installation
+    terraform --version
+    ```
+    
+    [Terraform Installation Guide](https://learn.hashicorp.com/terraform/getting-started/install.html)
+  </Step>
+
+  <Step title="Install Convox CLI">
+    Install the Convox CLI to manage your racks and applications.
+    
+    ```bash
+    # macOS
+    curl -L https://github.com/convox/convox/releases/latest/download/convox-macos -o /tmp/convox
+    
+    # Linux
+    curl -L https://github.com/convox/convox/releases/latest/download/convox-linux -o /tmp/convox
+    
+    sudo mv /tmp/convox /usr/local/bin/convox
+    sudo chmod 755 /usr/local/bin/convox
+    
+    # Verify installation
+    convox --version
+    ```
+    
+    [Convox CLI Documentation](/installation/cli)
+  </Step>
+</Steps>
+
+## Digital Ocean API Configuration
+
+Convox requires Digital Ocean API credentials to provision infrastructure.
+
+### Required Environment Variables
+
+<ParamField path="DIGITALOCEAN_TOKEN" type="string" required>
+  Personal Access Token for Digital Ocean API
+</ParamField>
+
+<ParamField path="DIGITALOCEAN_ACCESS_ID" type="string" required>
+  Spaces Access Key ID for object storage
+</ParamField>
+
+<ParamField path="DIGITALOCEAN_SECRET_KEY" type="string" required>
+  Spaces Secret Key for object storage
+</ParamField>
+
+### Create Digital Ocean Tokens
+
+<Steps>
+  <Step title="Create Personal Access Token">
+    1. Log into [Digital Ocean Control Panel](https://cloud.digitalocean.com)
+    2. Navigate to [API Tokens](https://cloud.digitalocean.com/account/api/tokens)
+    3. Click **Generate New Token**
+    4. Name: `convox`
+    5. Scopes: Select **Read** and **Write**
+    6. Click **Generate Token**
+    
+    <Warning>
+    Copy the token immediately - it won't be shown again!
+    </Warning>
+    
+    ```bash
+    export DIGITALOCEAN_TOKEN="dop_v1_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    ```
+  </Step>
+  
+  <Step title="Create Spaces Access Key">
+    Digital Ocean Spaces (S3-compatible storage) is used for build artifacts.
+    
+    1. Navigate to [API → Spaces Keys](https://cloud.digitalocean.com/account/api/tokens)
+    2. Scroll to **Spaces access keys** section
+    3. Click **Generate New Key**
+    4. Name: `convox`
+    5. Click **Create**
+    
+    You'll receive:
+    - **Key** → Use as `DIGITALOCEAN_ACCESS_ID`
+    - **Secret** → Use as `DIGITALOCEAN_SECRET_KEY`
+    
+    ```bash
+    export DIGITALOCEAN_ACCESS_ID="your-spaces-access-key"
+    export DIGITALOCEAN_SECRET_KEY="your-spaces-secret-key"
+    ```
+  </Step>
+  
+  <Step title="Verify Credentials">
+    ```bash
+    echo "Token: $DIGITALOCEAN_TOKEN"
+    echo "Access ID: $DIGITALOCEAN_ACCESS_ID"
+    echo "Secret Key: $DIGITALOCEAN_SECRET_KEY"
+    ```
+    
+    Ensure all three variables are set before proceeding.
+  </Step>
+</Steps>
+
+<Warning>
+Store your credentials securely. Never commit them to version control.
+</Warning>
+
+## Installation
+
+Install a Convox Rack on Digital Ocean using the CLI:
+
+```bash
+convox rack install do <rack-name> [param1=value1] [param2=value2]...
+```
+
+### Basic Installation
+
+```bash
+# Install with default settings
+convox rack install do production
+
+# Install in specific region
+convox rack install do production region=sfo3
+
+# Install with custom node type
+convox rack install do production region=nyc3 node_type=s-2vcpu-4gb
+```
+
+### Installation Examples
+
+<CodeGroup>
+```bash Development
+# Cost-optimized development rack
+convox rack install do dev \
+  region=nyc3 \
+  node_type=s-2vcpu-2gb
+```
+
+```bash Production
+# Production rack with larger nodes
+convox rack install do production \
+  region=sfo3 \
+  node_type=s-4vcpu-8gb \
+  registry_disk=100Gi
+```
+
+```bash High-Performance
+# CPU-optimized rack
+convox rack install do compute \
+  region=nyc1 \
+  node_type=c-4
+```
+</CodeGroup>
+
+## Configuration Parameters
+
+Convox on Digital Ocean supports the following configuration parameters:
+
+### Region Configuration
+
+<ParamField path="region" type="string" default="nyc3">
+  Digital Ocean region where the rack will be deployed
+  
+  **Available Regions:**
+  
+  **North America:**
+  - `nyc1` - New York City 1
+  - `nyc3` - New York City 3 (default)
+  - `sfo3` - San Francisco 3
+  - `tor1` - Toronto 1
+  
+  **Europe:**
+  - `lon1` - London 1
+  - `fra1` - Frankfurt 1
+  - `ams3` - Amsterdam 3
+  
+  **Asia:**
+  - `sgp1` - Singapore 1
+  - `blr1` - Bangalore 1
+  
+  ```bash
+  convox rack install do mystack region=sfo3
+  ```
+  
+  <Tip>
+  Choose a region close to your users for lower latency.
+  </Tip>
+  
+  [View all Digital Ocean regions](https://slugs.do-api.dev/)
+</ParamField>
+
+### Node Configuration
+
+<ParamField path="node_type" type="string" default="s-2vcpu-4gb">
+  Digital Ocean droplet size for Kubernetes nodes
+  
+  **Standard Droplets (General Purpose):**
+  - `s-1vcpu-1gb` - 1 vCPU, 1 GB RAM, 25 GB SSD
+  - `s-1vcpu-2gb` - 1 vCPU, 2 GB RAM, 50 GB SSD
+  - `s-2vcpu-2gb` - 2 vCPU, 2 GB RAM, 60 GB SSD
+  - `s-2vcpu-4gb` - 2 vCPU, 4 GB RAM, 80 GB SSD (default)
+  - `s-4vcpu-8gb` - 4 vCPU, 8 GB RAM, 160 GB SSD
+  - `s-8vcpu-16gb` - 8 vCPU, 16 GB RAM, 320 GB SSD
+  
+  **CPU-Optimized Droplets:**
+  - `c-2` - 2 vCPU, 4 GB RAM
+  - `c-4` - 4 vCPU, 8 GB RAM
+  - `c-8` - 8 vCPU, 16 GB RAM
+  - `c-16` - 16 vCPU, 32 GB RAM
+  
+  **Memory-Optimized Droplets:**
+  - `m-2vcpu-16gb` - 2 vCPU, 16 GB RAM
+  - `m-4vcpu-32gb` - 4 vCPU, 32 GB RAM
+  - `m-8vcpu-64gb` - 8 vCPU, 64 GB RAM
+  
+  **General Purpose Droplets:**
+  - `g-2vcpu-8gb` - 2 vCPU, 8 GB RAM
+  - `g-4vcpu-16gb` - 4 vCPU, 16 GB RAM
+  - `g-8vcpu-32gb` - 8 vCPU, 32 GB RAM
+  
+  ```bash
+  convox rack install do mystack node_type=s-4vcpu-8gb
+  ```
+  
+  [View all droplet sizes](https://slugs.do-api.dev/)
+</ParamField>
+
+### Registry Configuration
+
+<ParamField path="registry_disk" type="string" default="50Gi">
+  Persistent disk size for the Docker registry
+  
+  Digital Ocean uses an in-cluster registry for Docker images. This parameter sets the volume size for image storage.
+  
+  **Recommended Sizes:**
+  - `50Gi` - Small projects, few applications (default)
+  - `100Gi` - Medium projects, multiple applications
+  - `250Gi` - Large projects, many images
+  - `500Gi` - Very large deployments
+  
+  ```bash
+  convox rack install do mystack registry_disk=100Gi
+  ```
+  
+  <Note>
+  The registry stores all Docker images for your applications. Size appropriately based on the number and size of your container images.
+  </Note>
+</ParamField>
+
+### SSL/TLS Configuration
+
+<ParamField path="cert_duration" type="string" default="2160h">
+  Certificate renewal period (90 days by default)
+  
+  Convox automatically manages TLS certificates using Let's Encrypt.
+  
+  **Duration Format:**
+  - `720h` - 30 days
+  - `2160h` - 90 days (recommended, default)
+  - `4320h` - 180 days
+  
+  ```bash
+  convox rack install do mystack cert_duration=2160h
+  ```
+</ParamField>
+
+### Logging Configuration
+
+<ParamField path="syslog" type="string">
+  Forward logs to an external syslog endpoint
+  
+  **Supported Protocols:**
+  - `tcp+tls://hostname:port` - TLS-encrypted TCP (recommended)
+  - `tcp://hostname:port` - Unencrypted TCP
+  - `udp://hostname:port` - UDP
+  
+  **Popular Services:**
+  - Papertrail: `tcp+tls://logsN.papertrailapp.com:XXXXX`
+  - Loggly: `tcp+tls://logs-01.loggly.com:6514`
+  - Splunk: `tcp+tls://input.splunk.com:514`
+  
+  ```bash
+  convox rack install do mystack syslog=tcp+tls://logs.papertrailapp.com:12345
+  ```
+</ParamField>
+
+## Infrastructure Components
+
+When you install Convox on Digital Ocean, Terraform provisions:
+
+### Compute
+- **DOKS Cluster** (Kubernetes control plane)
+- **Node Pool** with auto-scaling droplets
+- **Load Balancer** for ingress traffic
+
+### Storage
+- **Spaces Bucket** (S3-compatible) for build artifacts
+- **Volume** for Docker registry
+- **Block Storage** for persistent volumes
+
+### Networking
+- **VPC** for cluster isolation
+- **Firewall Rules** for security
+- **Load Balancer** with automatic SSL
+
+### Registry
+- **In-cluster Docker Registry** for container images
+- **Persistent Volume** for image storage
+
+## Cost Optimization
+
+<CardGroup cols={2}>
+  <Card title="Start Small" icon="seedling">
+    ```bash
+    convox rack install do dev \
+      node_type=s-2vcpu-2gb
+    ```
+    
+    Begin with smaller droplets ($18/month) and scale up as needed
+  </Card>
+  
+  <Card title="Right-Size Registry" icon="hard-drive">
+    ```bash
+    convox rack install do production \
+      registry_disk=50Gi
+    ```
+    
+    Start with default 50Gi and increase only when needed
+  </Card>
+  
+  <Card title="Regional Pricing" icon="location-dot">
+    All Digital Ocean regions have the same pricing, so choose based on proximity to users rather than cost
+  </Card>
+  
+  <Card title="Kubernetes Auto-Scaling" icon="arrows-up-down">
+    DOKS automatically scales your node pool based on demand, so you only pay for what you use
+  </Card>
+</CardGroup>
+
+### Pricing Examples
+
+**Development Rack:**
+- 2x `s-2vcpu-2gb` nodes: $18/month each = $36/month
+- Load Balancer: $12/month
+- Registry Volume (50Gi): ~$5/month
+- **Total: ~$53/month**
+
+**Production Rack:**
+- 3x `s-4vcpu-8gb` nodes: $72/month each = $216/month
+- Load Balancer: $12/month
+- Registry Volume (100Gi): ~$10/month
+- **Total: ~$238/month**
+
+## Production Best Practices
+
+<Steps>
+  <Step title="Use Appropriate Node Sizes">
+    ```bash
+    convox rack install do production \
+      node_type=s-4vcpu-8gb
+    ```
+    
+    For production workloads:
+    - General apps: `s-4vcpu-8gb` or `g-4vcpu-16gb`
+    - CPU-intensive: `c-4` or `c-8`
+    - Memory-intensive: `m-4vcpu-32gb`
+  </Step>
+  
+  <Step title="Size Registry Appropriately">
+    ```bash
+    convox rack install do production \
+      registry_disk=100Gi
+    ```
+    
+    Allocate sufficient storage for your Docker images. Monitor usage and expand as needed.
+  </Step>
+  
+  <Step title="Enable Log Forwarding">
+    ```bash
+    convox rack install do production \
+      syslog=tcp+tls://logs.papertrailapp.com:12345
+    ```
+    
+    Forward logs to external services for long-term retention and analysis.
+  </Step>
+  
+  <Step title="Select Optimal Region">
+    ```bash
+    convox rack install do production \
+      region=nyc3
+    ```
+    
+    Choose region based on:
+    - Proximity to your users (latency)
+    - Your team's location
+    - Compliance requirements
+  </Step>
+  
+  <Step title="Configure Monitoring">
+    After installation, set up monitoring:
+    - Digital Ocean Monitoring (built-in)
+    - External APM tools (Datadog, New Relic)
+    - Application-level metrics
+  </Step>
+</Steps>
+
+## Updating Rack Parameters
+
+After installation, you can update rack parameters:
+
+```bash
+# View current parameters
+convox rack params -r production
+
+# Update node type (requires node recreation)
+convox rack params set node_type=s-4vcpu-8gb -r production
+
+# Update registry disk size
+convox rack params set registry_disk=100Gi -r production
+
+# Update multiple parameters
+convox rack params set node_type=s-4vcpu-8gb registry_disk=100Gi -r production
+```
+
+<Warning>
+Changing node types requires recreating the node pool, which may cause temporary service disruption. Plan accordingly.
+</Warning>
+
+## Troubleshooting
+
+### Installation Issues
+
+<Accordion title="Invalid API token">
+  **Error:** `Authentication failed` or `401 Unauthorized`
+  
+  **Solution:**
+  1. Verify token is correctly copied (no extra spaces)
+  2. Check token has both Read and Write scopes
+  3. Ensure token hasn't been revoked
+  4. Generate a new token if needed
+  
+  ```bash
+  echo "Token: $DIGITALOCEAN_TOKEN"
+  ```
+</Accordion>
+
+<Accordion title="Spaces key issues">
+  **Error:** `Failed to create spaces bucket` or S3 errors
+  
+  **Solution:**
+  1. Verify Spaces keys are correct:
+  ```bash
+  echo "Access ID: $DIGITALOCEAN_ACCESS_ID"
+  echo "Secret Key: $DIGITALOCEAN_SECRET_KEY"
+  ```
+  
+  2. Generate new Spaces access keys if needed
+  3. Ensure keys have write permissions
+</Accordion>
+
+<Accordion title="Resource quota exceeded">
+  **Error:** `Droplet limit exceeded` or similar
+  
+  **Solution:**
+  Digital Ocean has default limits on resources:
+  1. Check your account limits in [Digital Ocean Control Panel](https://cloud.digitalocean.com/account)
+  2. Request limit increase via support ticket
+  3. Or use smaller/fewer droplets
+</Accordion>
+
+<Accordion title="Region not available">
+  **Error:** `Region [xxx] does not support Kubernetes`
+  
+  **Solution:**
+  Not all DO regions support DOKS. Use one of the supported regions:
+  - `nyc1`, `nyc3`
+  - `sfo3`
+  - `sgp1`
+  - `lon1`
+  - `fra1`
+  - `ams3`
+  - `tor1`
+  - `blr1`
+</Accordion>
+
+### Runtime Issues
+
+<Accordion title="Node pool not scaling">
+  **Issue:** Cluster not adding nodes under load
+  
+  **Solution:**
+  - Check droplet limits in your account
+  - Verify auto-scaling is enabled in Digital Ocean Control Panel
+  - Review DOKS cluster events for errors
+</Accordion>
+
+<Accordion title="Registry disk full">
+  **Issue:** `No space left on device` errors during builds
+  
+  **Solution:**
+  Increase registry disk size:
+  ```bash
+  convox rack params set registry_disk=100Gi -r production
+  ```
+  
+  Or clean up old images:
+  ```bash
+  convox builds -a myapp
+  convox builds delete <old-build-id> -a myapp
+  ```
+</Accordion>
+
+<Accordion title="Load balancer not responding">
+  **Issue:** Cannot access applications
+  
+  **Solution:**
+  - Check firewall rules in Digital Ocean Control Panel
+  - Verify load balancer health checks are passing
+  - Check application logs:
+    ```bash
+    convox logs -a myapp
+    ```
+  - Verify DNS is pointing to load balancer IP
+</Accordion>
+
+## Digital Ocean Regions
+
+Available DOKS regions:
+
+### North America
+- **NYC1** - New York City 1
+- **NYC3** - New York City 3 (popular)
+- **SFO3** - San Francisco 3 (popular)
+- **TOR1** - Toronto 1
+
+### Europe
+- **LON1** - London 1
+- **FRA1** - Frankfurt 1 (popular)
+- **AMS3** - Amsterdam 3
+
+### Asia Pacific
+- **SGP1** - Singapore 1
+- **BLR1** - Bangalore 1
+
+<Tip>
+All regions have identical pricing. Choose based on proximity to users for best performance.
+</Tip>
+
+[Check latest region availability](https://slugs.do-api.dev/)
+
+## Comparison with Other Providers
+
+<CardGroup cols={3}>
+  <Card title="Simplicity" icon="star">
+    Digital Ocean offers the simplest setup with minimal configuration options
+  </Card>
+  
+  <Card title="Cost" icon="dollar-sign">
+    Very competitive pricing, especially for small to medium workloads
+  </Card>
+  
+  <Card title="Features" icon="list">
+    Fewer advanced features than AWS/GCP/Azure, but covers most common use cases
+  </Card>
+</CardGroup>
+
+### When to Choose Digital Ocean
+
+✅ **Good for:**
+- Small to medium applications
+- Startups and development teams
+- Cost-conscious deployments
+- Simpler infrastructure needs
+- Quick setup and deployment
+
+❌ **Consider alternatives if you need:**
+- Advanced networking (VPN, Direct Connect)
+- Extensive compliance certifications
+- GPU/specialized compute
+- Global presence (limited regions)
+- Advanced managed services
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Deploy an Application" icon="rocket" href="/deployment/deploying-changes">
+    Learn how to deploy your first application to your new rack
+  </Card>
+  
+  <Card title="Configure Resources" icon="database" href="/reference/primitives/app/resource">
+    Set up databases, Redis, and other resources
+  </Card>
+  
+  <Card title="Custom Domains" icon="globe" href="/deployment/custom-domains">
+    Configure custom domains and SSL certificates
+  </Card>
+  
+  <Card title="Rack Management" icon="gears" href="/management/cli-rack-management">
+    Learn how to manage and update your rack
+  </Card>
+</CardGroup>
+
+## Additional Resources
+
+- [Digital Ocean Kubernetes Documentation](https://docs.digitalocean.com/products/kubernetes/)
+- [Digital Ocean Spaces](https://docs.digitalocean.com/products/spaces/)
+- [Convox Troubleshooting](/help/troubleshooting) - Common issues and solutions
+- [Community Forum](https://community.convox.com) - Get help from the community

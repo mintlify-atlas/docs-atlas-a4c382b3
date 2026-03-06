@@ -1,0 +1,154 @@
+---
+title: "Welcome to Convox"
+description: "Open-source PaaS built on Kubernetes for AWS, Google Cloud, Digital Ocean, and Azure"
+---
+
+# Welcome to Convox
+
+Convox is an open-source Platform as a Service (PaaS) that runs on your own cloud infrastructure. Built on Kubernetes, Convox simplifies application deployment and management across multiple cloud providers while giving you complete control over your infrastructure.
+
+## Why Convox?
+
+<CardGroup cols={2}>
+  <Card title="Infrastructure as Code" icon="code">
+    Define your entire application stack in a single `convox.yml` file. No complex Kubernetes manifests required.
+  </Card>
+  
+  <Card title="Multi-Cloud Support" icon="cloud">
+    Deploy to AWS, Google Cloud, Digital Ocean, or Azure using the same workflow and configuration.
+  </Card>
+  
+  <Card title="Built on Kubernetes" icon="dharmachakra">
+    Leverage the power and ecosystem of Kubernetes without the complexity. Convox handles the details.
+  </Card>
+  
+  <Card title="Production Ready" icon="rocket">
+    Includes automatic SSL, load balancing, health checks, rolling updates, and instant rollbacks out of the box.
+  </Card>
+</CardGroup>
+
+## What You Can Do With Convox
+
+Convox provides everything you need to run production applications:
+
+- **Deploy Applications**: Simple `convox deploy` command handles building, pushing, and deploying your code
+- **Manage Infrastructure**: Postgres, Redis, MySQL databases and other resources defined in your manifest
+- **Scale Services**: Horizontal autoscaling based on CPU/memory metrics or static process counts
+- **Monitor & Debug**: Stream logs, execute one-off commands, and inspect running processes
+- **Rollback Instantly**: Revert to any previous release in seconds with zero downtime
+- **CI/CD Integration**: Works seamlessly with GitHub Actions, GitLab CI, CircleCI, and other platforms
+
+## Core Concepts
+
+### Rack
+
+A **Rack** is your Convox platform installation - an isolated set of computing resources, networking, and storage running on your cloud provider. Think of it as your personal PaaS.
+
+<CodeGroup>
+```bash List Racks
+$ convox racks
+NAME               PROVIDER  STATUS
+org/production     aws       running
+org/staging        aws       running
+```
+
+```bash Rack Info
+$ convox rack -r production
+Name      production
+Provider  aws
+Router    router.0a1b2c3d4e5f.convox.cloud
+Status    running
+Version   3.0.0
+```
+</CodeGroup>
+
+Most teams use multiple Racks to separate environments:
+- **Development**: Local Rack on developer workstations
+- **Staging**: Cloud Rack for testing
+- **Production**: Cloud Rack for live applications
+
+### App
+
+An **App** is a logical container for your application code and its infrastructure dependencies. Apps are defined by a `convox.yml` manifest and deployed as atomic units.
+
+```yaml convox.yml
+services:
+  web:
+    build: .
+    port: 3000
+    health: /health
+resources:
+  database:
+    type: postgres
+```
+
+### Services
+
+**Services** are the horizontally-scalable components of your application. Each service runs one or more processes and can expose network ports.
+
+```bash
+$ convox services
+SERVICE  DOMAIN                               PORTS
+web      web.myapp.0a1b2c3d4e5f.convox.cloud  443:3000
+api      api.myapp.0a1b2c3d4e5f.convox.cloud  443:8080
+```
+
+### Resources
+
+**Resources** are managed infrastructure components like databases, caches, and queues that your services depend on.
+
+<Info>
+Convox automatically provisions, configures, and injects connection credentials as environment variables into your services.
+</Info>
+
+## Supported Cloud Providers
+
+<CardGroup cols={2}>
+  <Card title="Amazon Web Services" icon="aws">
+    Full support for EKS, RDS, ElastiCache, and other AWS services
+  </Card>
+  
+  <Card title="Google Cloud Platform" icon="google">
+    Deploy to GKE with Cloud SQL and other GCP managed services
+  </Card>
+  
+  <Card title="Digital Ocean" icon="digital-ocean">
+    Run on DOKS with managed databases and block storage
+  </Card>
+  
+  <Card title="Microsoft Azure" icon="microsoft">
+    Use AKS with Azure Database and other Azure services
+  </Card>
+</CardGroup>
+
+## Getting Started
+
+Ready to deploy your first application? Our quickstart guide will have you up and running in minutes.
+
+<Card title="Quickstart Guide" icon="play" href="/quickstart">
+  Follow our step-by-step guide to install Convox, deploy a sample app, and learn core workflows
+</Card>
+
+## Learn More
+
+<CardGroup cols={3}>
+  <Card title="Architecture" icon="sitemap" href="/architecture">
+    Understand how Convox works under the hood
+  </Card>
+  
+  <Card title="convox.yml Reference" icon="file-code" href="/configuration/convox-yml">
+    Complete manifest configuration options
+  </Card>
+  
+  <Card title="CLI Commands" icon="terminal" href="/reference/cli">
+    Full command-line reference
+  </Card>
+</CardGroup>
+
+## Open Source
+
+Convox is 100% open source and licensed under Apache 2.0. View the source code, report issues, or contribute on [GitHub](https://github.com/convox/convox).
+
+<Tip>
+Join the Convox community on [Stack Overflow](https://stackoverflow.com/questions/tagged/convox) to get help and share knowledge.
+</Tip>

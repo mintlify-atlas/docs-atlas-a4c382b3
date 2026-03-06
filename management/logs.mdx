@@ -1,0 +1,374 @@
+---
+title: "Viewing Application Logs"
+description: "Access and filter logs from your Convox applications for debugging and monitoring"
+---
+
+# Viewing Application Logs
+
+Convox automatically captures and stores all logs from your applications, making it easy to debug issues, monitor behavior, and audit activity.
+
+## What Gets Logged
+
+Convox captures logs from multiple sources:
+
+<CardGroup cols={3}>
+  <Card title="Application Output" icon="terminal">
+    All stdout and stderr from running processes
+  </Card>
+  
+  <Card title="System Events" icon="gears">
+    Deployment events, scaling activities, and state changes
+  </Card>
+  
+  <Card title="Health Checks" icon="heart-pulse">
+    Health check failures and status changes
+  </Card>
+</CardGroup>
+
+## Basic Usage
+
+View logs for your application using the `convox logs` command:
+
+```bash
+convox logs -a myapp
+```
+
+**Example Output:**
+```
+2024-03-06T14:23:15Z service/web/7f3a2b1c starting on port 3000
+2024-03-06T14:23:16Z service/web/7f3a2b1c GET / 200 45ms
+2024-03-06T14:23:17Z service/web/7f3a2b1c GET /api/users 200 128ms
+2024-03-06T14:23:18Z service/worker/9e4c5d2a Processing job: send_email
+```
+
+## Filtering Logs
+
+### By Service
+
+View logs from a specific service:
+
+```bash
+convox logs -a myapp --service web
+```
+
+<Note>
+  Service-level logging is especially useful in multi-service applications to isolate specific component behavior.
+</Note>
+
+### By Time Range
+
+Control which logs you see based on time:
+
+<CodeGroup>
+```bash Recent Logs
+convox logs -a myapp --since 5m
+```
+
+```bash Specific Timeframe
+convox logs -a myapp --since 1h
+```
+
+```bash Extended History
+convox logs -a myapp --since 24h
+```
+</CodeGroup>
+
+Supported time units:
+- `s` - seconds
+- `m` - minutes  
+- `h` - hours
+
+### By Content
+
+Filter logs containing specific text:
+
+```bash
+convox logs -a myapp --filter "error"
+```
+
+**Example Output:**
+```
+2024-03-06T14:25:32Z service/web/7f3a2b1c ERROR: Database connection failed
+2024-03-06T14:25:45Z service/web/7f3a2b1c ERROR: Timeout waiting for response
+```
+
+<Warning>
+  The `--filter` flag is not available when using `--service`. Use grep or other tools for service-specific filtering.
+</Warning>
+
+### Limiting Output
+
+When using service-specific logging, limit the number of lines:
+
+```bash
+convox logs -a myapp --service web --tail 100
+```
+
+## Streaming vs Static Logs
+
+### Follow Mode (Default)
+
+By default, logs stream continuously:
+
+```bash
+convox logs -a myapp
+```
+
+This keeps the connection open and displays new logs as they arrive - perfect for monitoring live applications.
+
+### Static Mode
+
+View logs without streaming, useful for scripting or quick checks:
+
+```bash
+convox logs -a myapp --no-follow
+```
+
+<Tip>
+  Use `--no-follow` in scripts or CI/CD pipelines to get a snapshot of logs without keeping connections open.
+</Tip>
+
+## Common Scenarios
+
+### Debugging Deployment Issues
+
+<Steps>
+  <Step title="Check recent deployment logs">
+    ```bash
+    convox logs -a myapp --since 10m
+    ```
+  </Step>
+  
+  <Step title="Look for system events">
+    Filter for Kubernetes and deployment-related messages:
+    ```bash
+    convox logs -a myapp --filter "system/k8s" --since 15m
+    ```
+  </Step>
+  
+  <Step title="Check specific service startup">
+    ```bash
+    convox logs -a myapp --service web --since 5m
+    ```
+  </Step>
+</Steps>
+
+### Monitoring Production Errors
+
+Set up continuous monitoring for errors:
+
+<CodeGroup>
+```bash General Errors
+convox logs -a myapp --filter "ERROR"
+```
+
+```bash HTTP Errors
+convox logs -a myapp --filter "500"
+```
+
+```bash Application Exceptions
+convox logs -a myapp --filter "Exception"
+```
+</CodeGroup>
+
+### Investigating Performance Issues
+
+Track slow requests or performance problems:
+
+```bash
+convox logs -a myapp --service web --filter "slow" --since 1h
+```
+
+### Auditing User Activity
+
+Review specific user actions or API calls:
+
+```bash
+convox logs -a myapp --filter "user_id=12345" --since 24h --no-follow
+```
+
+## Understanding Log Format
+
+Convox logs follow a consistent format:
+
+```
+[timestamp] [source] [message]
+```
+
+<Accordion title="Timestamp">
+  **Format:** ISO 8601 (UTC)
+  
+  Example: `2024-03-06T14:23:15Z`
+  
+  All timestamps are in UTC for consistency across distributed systems.
+</Accordion>
+
+<Accordion title="Source">
+  **Format:** `service/name/process-id` or `system/component`
+  
+  Examples:
+  - `service/web/7f3a2b1c` - Application service log
+  - `system/k8s/web` - Kubernetes event for web service
+  - `system/k8s/atom/app` - System-level event
+</Accordion>
+
+<Accordion title="Message">
+  The actual log content from your application or system event.
+  
+  This can be structured (JSON) or unstructured text depending on how your application logs.
+</Accordion>
+
+## System Event Logs
+
+Convox injects system events into your log stream:
+
+### Deployment Events
+
+```
+2024-03-06T14:16:50Z system/k8s/atom/app Status: Running => Pending
+2024-03-06T14:16:53Z system/k8s/atom/app Status: Pending => Updating
+2024-03-06T14:16:53Z system/k8s/web Created pod: web-56f5d77d7-6gx8z
+2024-03-06T14:16:53Z system/k8s/web Scaled up replica set web-56f5d77d7 to 1
+```
+
+### Health Check Events
+
+```
+2024-03-06T14:17:17Z system/k8s/web-56f5d77d7-6gx8z Readiness probe failed: HTTP probe failed with statuscode: 404
+2024-03-06T14:17:25Z system/k8s/web-56f5d77d7-6gx8z Readiness probe succeeded
+```
+
+### Pod Lifecycle Events
+
+```
+2024-03-06T14:16:54Z system/k8s/web-56f5d77d7-6gx8z Pulling image "gcr.io/project/app:web.BABCD"
+2024-03-06T14:17:06Z system/k8s/web-56f5d77d7-6gx8z Successfully pulled image
+2024-03-06T14:17:09Z system/k8s/web-56f5d77d7-6gx8z Started container main
+```
+
+## Rack Logs
+
+View logs from the Rack infrastructure itself:
+
+```bash
+convox rack logs
+```
+
+This shows:
+- Rack system events
+- Scaling operations
+- Infrastructure changes
+- Platform-level issues
+
+<Warning>
+  Rack logs are separate from application logs and require rack-level permissions to view.
+</Warning>
+
+## Build Logs
+
+View logs from the build process:
+
+```bash
+convox builds logs <build-id>
+```
+
+Useful for debugging:
+- Build failures
+- Dockerfile issues
+- Dependency installation problems
+- Image creation errors
+
+## External Log Forwarding
+
+For long-term storage and advanced analysis, forward logs to external services using the `syslog` rack parameter:
+
+```bash
+convox rack params set syslog=tcp+tls://logs.example.com:514
+```
+
+Supported protocols:
+- `tcp+tls://` - TLS encrypted TCP
+- `tcp://` - Plain TCP
+- `udp://` - UDP
+
+<Tip>
+  External log forwarding is useful for compliance, long-term retention, and integration with tools like Datadog, Splunk, or ELK.
+</Tip>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Structure Your Logs" icon="list">
+    Use JSON or structured logging in your applications for easier parsing and filtering.
+  </Card>
+  
+  <Card title="Include Context" icon="tag">
+    Log request IDs, user IDs, or correlation IDs to trace requests across services.
+  </Card>
+  
+  <Card title="Set Appropriate Levels" icon="layer-group">
+    Use log levels (INFO, WARN, ERROR) consistently to make filtering effective.
+  </Card>
+  
+  <Card title="Avoid Sensitive Data" icon="shield">
+    Never log passwords, tokens, or PII. Use log scrubbing if necessary.
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### No Logs Appearing
+
+<Steps>
+  <Step title="Verify application is running">
+    ```bash
+    convox ps -a myapp
+    ```
+  </Step>
+  
+  <Step title="Check if app is writing to stdout/stderr">
+    Ensure your application writes logs to standard output, not files.
+  </Step>
+  
+  <Step title="Verify rack connection">
+    ```bash
+    convox rack
+    ```
+  </Step>
+</Steps>
+
+### Logs Cut Off or Missing
+
+If logs seem incomplete:
+
+1. Check time range - expand with `--since`
+2. Verify service name is correct
+3. Check if logs were before app deployment
+
+### Service Flag Not Working
+
+<Warning>
+  The `--service` flag requires the rack to be in "standard" mode. Some rack configurations may not support service-specific logging.
+</Warning>
+
+## Command Reference
+
+```bash
+convox logs [options]
+```
+
+**Key Flags:**
+- `--app, -a` - Specify application name
+- `--rack, -r` - Specify rack name
+- `--service, -s` - Filter by service name
+- `--since` - Time range (e.g., 5m, 1h, 24h)
+- `--filter` - Filter by text (not compatible with --service)
+- `--tail` - Number of lines (only with --service)
+- `--no-follow` - Don't stream, just show existing logs
+
+## Related Documentation
+
+- [Run One-Off Commands](/management/run)
+- [Monitoring & Alerting](/management/monitoring)
+- [Troubleshooting Guide](/management/troubleshooting)
+- [Health Checks Configuration](/configuration/health-checks)

@@ -1,0 +1,510 @@
+---
+title: "Custom Domains"
+description: "Configure custom domains for your Convox applications"
+---
+
+Custom domains allow you to route one or more domains to a [Service](/reference/primitives/app/service), replacing the default Convox-provided URLs with your own branded domains.
+
+## Quick Start
+
+Configuring a custom domain involves two steps:
+
+<Steps>
+  <Step title="Configure domain in convox.yml">
+    Add the domain attribute to your service.
+  </Step>
+  
+  <Step title="Point DNS to Convox">
+    Create a CNAME record pointing to your rack's router endpoint.
+  </Step>
+</Steps>
+
+## Domain Configuration
+
+Define custom domains in your `convox.yml` file.
+
+### Single Domain
+
+The simplest configuration uses one domain:
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    domain: myapp.example.org
+```
+
+### Multiple Domains
+
+To route multiple domains to the same service, use comma-separated values:
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    domain: myapp.example.org,www.myapp.example.org,app.example.com
+```
+
+<Note>
+All specified domains will route to the same service and must be configured in your DNS provider.
+</Note>
+
+### Multiple Services
+
+Different services can have different domains:
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    domain: www.example.org
+  
+  api:
+    build: .
+    port: 8080
+    domain: api.example.org
+  
+  admin:
+    build: .
+    port: 4000
+    domain: admin.example.org
+```
+
+## Dynamic Configuration
+
+Avoid hardcoding domains using [Environment Interpolation](/configuration/environment#interpolation).
+
+### Using Environment Variables
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    domain: ${HOST}
+```
+
+Set the domain via environment variables:
+
+```bash
+$ convox env set HOST=myapp.example.org -a myapp
+```
+
+### Multiple Environments
+
+This approach is especially useful for managing different domains across environments:
+
+<CodeGroup>
+```bash Staging
+$ convox env set HOST=staging.example.org -a myapp-staging
+```
+
+```bash Production
+$ convox env set HOST=www.example.org,example.org -a myapp-production
+```
+</CodeGroup>
+
+## DNS Configuration
+
+After configuring domains in your `convox.yml`, you need to update your DNS settings.
+
+### Step 1: Find Your Router Endpoint
+
+Get your rack's router endpoint:
+
+```bash
+$ convox rack
+Name      production
+Provider  aws
+Router    router.0a1b2c3d4e5f.convox.cloud
+Status    running
+Version   3.15.0
+```
+
+The **Router** value is what you'll use in your DNS configuration.
+
+### Step 2: Create CNAME Records
+
+In your DNS provider (e.g., Route53, Cloudflare, Google Domains), create CNAME records:
+
+| Type | Name | Value |
+|------|------|-------|
+| CNAME | myapp.example.org | router.0a1b2c3d4e5f.convox.cloud |
+| CNAME | www.myapp.example.org | router.0a1b2c3d4e5f.convox.cloud |
+
+<Warning>
+You cannot use a CNAME record for apex/root domains (e.g., `example.org`). See the Apex Domains section below for workarounds.
+</Warning>
+
+### DNS Provider Examples
+
+<CodeGroup>
+```yaml AWS Route53
+Type: CNAME
+Name: myapp.example.org
+Value: router.0a1b2c3d4e5f.convox.cloud
+TTL: 300
+```
+
+```yaml Cloudflare
+Type: CNAME
+Name: myapp
+Target: router.0a1b2c3d4e5f.convox.cloud
+Proxy status: DNS only (grey cloud)
+TTL: Auto
+```
+
+```yaml Google Cloud DNS
+Resource Record Type: CNAME
+DNS Name: myapp.example.org
+Canonical name: router.0a1b2c3d4e5f.convox.cloud
+TTL: 300
+```
+</CodeGroup>
+
+### DNS Propagation
+
+DNS changes can take time to propagate:
+
+<Steps>
+  <Step title="Initial propagation">
+    Changes typically propagate within 5-30 minutes.
+  </Step>
+  
+  <Step title="Verify DNS">
+    Check DNS resolution:
+    ```bash
+    $ dig myapp.example.org
+    # Should show CNAME to router.0a1b2c3d4e5f.convox.cloud
+    ```
+  </Step>
+  
+  <Step title="Test the domain">
+    ```bash
+    $ curl https://myapp.example.org
+    ```
+  </Step>
+</Steps>
+
+## Apex Domains
+
+Apex domains (also called root or naked domains) like `example.org` cannot use CNAME records due to DNS specifications.
+
+### Solution 1: ALIAS Records (Recommended)
+
+Some DNS providers support ALIAS or ANAME records that work like CNAMEs at the apex:
+
+**Supported providers**:
+- AWS Route53 (ALIAS)
+- Cloudflare (CNAME Flattening)
+- DNSimple (ALIAS)
+- DNS Made Easy (ANAME)
+
+**Configuration**:
+```yaml
+Type: ALIAS (or ANAME)
+Name: example.org
+Target: router.0a1b2c3d4e5f.convox.cloud
+```
+
+### Solution 2: Redirect to WWW
+
+Redirect apex to www subdomain:
+
+<Steps>
+  <Step title="Configure DNS">
+    - Point `www.example.org` to Convox with CNAME
+    - Set up HTTP redirect from `example.org` to `www.example.org`
+  </Step>
+  
+  <Step title="Use provider redirect">
+    Many DNS providers offer redirect services:
+    - Cloudflare: Page Rules
+    - Route53: S3 redirect
+    - Netlify: Domain redirect
+  </Step>
+</Steps>
+
+### Solution 3: A Records
+
+As a last resort, use A records with IP addresses:
+
+<Warning>
+This approach is not recommended as IP addresses may change. Only use if your DNS provider doesn't support ALIAS records or redirects.
+</Warning>
+
+```bash
+# Get IP addresses for your router
+$ dig router.0a1b2c3d4e5f.convox.cloud +short
+203.0.113.10
+203.0.113.20
+```
+
+Create A records for each IP:
+```yaml
+Type: A
+Name: example.org
+Value: 203.0.113.10
+
+Type: A
+Name: example.org
+Value: 203.0.113.20
+```
+
+## SSL Certificates
+
+Convox automatically generates SSL certificates for custom domains using Let's Encrypt.
+
+### Automatic Certificate Generation
+
+When you configure a custom domain:
+
+<Steps>
+  <Step title="Deploy with domain">
+    Deploy your app with the domain configured in `convox.yml`.
+  </Step>
+  
+  <Step title="Certificate requested">
+    Convox automatically requests an SSL certificate from Let's Encrypt.
+  </Step>
+  
+  <Step title="Domain validation">
+    Let's Encrypt validates domain ownership via HTTP-01 challenge.
+  </Step>
+  
+  <Step title="Certificate issued">
+    Once validated, the certificate is issued and applied to your service.
+  </Step>
+</Steps>
+
+<Note>
+SSL certificate generation happens automatically during deployment. The first deployment with a new domain may take a few extra minutes.
+</Note>
+
+### Pre-generate Certificates
+
+To minimize deployment delays, pre-generate certificates:
+
+```bash
+$ convox certs generate "myapp.example.org" --issuer letsencrypt
+Generating certificate... OK, cert-abc123def456
+```
+
+See [SSL Documentation](/deployment/ssl) for advanced certificate management.
+
+## Deployment Process
+
+When you add or change custom domains:
+
+<Steps>
+  <Step title="Update convox.yml">
+    Add or modify the domain attribute.
+  </Step>
+  
+  <Step title="Deploy the application">
+    ```bash
+    $ convox deploy -a myapp
+    ```
+  </Step>
+  
+  <Step title="Configure DNS">
+    Update DNS records to point to your rack's router.
+  </Step>
+  
+  <Step title="Wait for propagation">
+    DNS and SSL certificate generation may take a few minutes.
+  </Step>
+  
+  <Step title="Verify">
+    Test your custom domain:
+    ```bash
+    $ curl -I https://myapp.example.org
+    ```
+  </Step>
+</Steps>
+
+## Wildcard Domains
+
+<Warning>
+Wildcard domains are NOT supported with the default HTTP-01 SSL validation method. You must use DNS-01 validation.
+</Warning>
+
+To use wildcard domains like `*.example.org`:
+
+1. Configure DNS-01 challenge for Let's Encrypt
+2. See [SSL Documentation - DNS01 Challenge](/deployment/ssl#advanced-ssl-configuration-lets-encrypt-dns01-challenge-with-route53)
+
+## Common Patterns
+
+### Pattern 1: WWW and Apex
+
+Serve both www and non-www versions:
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    domain: ${DOMAINS}
+```
+
+```bash
+$ convox env set DOMAINS=www.example.org,example.org -a myapp
+```
+
+Configure DNS:
+- CNAME: `www.example.org` → `router.xxx.convox.cloud`
+- ALIAS: `example.org` → `router.xxx.convox.cloud`
+
+### Pattern 2: Multi-Region
+
+Different domains for different regions:
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    domain: ${REGIONAL_DOMAIN}
+```
+
+```bash
+# US deployment
+$ convox env set REGIONAL_DOMAIN=us.example.org -a myapp-us
+
+# EU deployment  
+$ convox env set REGIONAL_DOMAIN=eu.example.org -a myapp-eu
+```
+
+### Pattern 3: Feature Branch Previews
+
+Dynamic domains for review apps:
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    domain: ${BRANCH}.preview.example.org
+```
+
+Set in CI/CD pipeline:
+```bash
+$ convox env set BRANCH=$GIT_BRANCH -a myapp-preview-$GIT_BRANCH
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Environment Variables" icon="dollar-sign">
+    Avoid hardcoding domains in convox.yml. Use environment interpolation for flexibility across environments.
+  </Card>
+  
+  <Card title="Set Low TTL Initially" icon="clock">
+    Use low TTL values (300 seconds) when first configuring DNS, in case you need to make changes.
+  </Card>
+  
+  <Card title="Test Before Production" icon="flask">
+    Configure and test custom domains in staging before applying to production.
+  </Card>
+  
+  <Card title="Monitor Certificate Expiration" icon="certificate">
+    While Convox auto-renews certificates, monitor them to catch any renewal issues.
+  </Card>
+  
+  <Card title="Use HTTPS Only" icon="lock">
+    Configure your application to redirect HTTP to HTTPS for security.
+  </Card>
+  
+  <Card title="Document DNS Records" icon="book">
+    Keep documentation of all DNS records for your Convox applications.
+  </Card>
+  
+  <Card title="Plan for Multiple Domains" icon="sitemap">
+    Design your domain strategy upfront to avoid frequent DNS changes.
+  </Card>
+  
+  <Card title="Use Subdomain Delegation" icon="network-wired">
+    For complex setups, delegate a subdomain entirely to Convox for easier management.
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### Domain Not Resolving
+
+**Symptoms**: Domain doesn't load or shows DNS errors
+
+**Possible causes**:
+- DNS records not configured
+- DNS not propagated yet
+- Incorrect CNAME target
+
+**Solutions**:
+1. Verify DNS record: `dig myapp.example.org`
+2. Check CNAME target matches router endpoint
+3. Wait for DNS propagation (up to 48 hours)
+4. Clear local DNS cache: `sudo dscacheutil -flushcache` (macOS)
+
+### SSL Certificate Not Issued
+
+**Symptoms**: HTTPS doesn't work or shows certificate errors
+
+**Possible causes**:
+- DNS not pointing to Convox yet
+- Let's Encrypt validation failed
+- Domain not in convox.yml
+
+**Solutions**:
+1. Verify DNS is pointing to Convox
+2. Check certificate status: `convox certs --generated`
+3. Ensure domain is in deployed convox.yml
+4. Check application logs for certificate errors
+
+### Wrong Application Responding
+
+**Symptoms**: Domain loads but shows wrong application
+
+**Possible causes**:
+- Domain configured in multiple apps
+- Old deployment still active
+- DNS cached to old endpoint
+
+**Solutions**:
+1. Search for domain in all apps: `convox apps`
+2. Verify correct app has domain: `convox env -a myapp`
+3. Check current release: `convox releases -a myapp`
+4. Clear CDN/proxy caches if using
+
+### Cannot Use Apex Domain
+
+**Symptoms**: Cannot create CNAME for apex domain
+
+**Solutions**:
+1. Check if DNS provider supports ALIAS records
+2. Use www subdomain instead
+3. Set up redirect from apex to www
+4. Switch to DNS provider that supports ALIAS
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="SSL Certificates" icon="certificate" href="/deployment/ssl">
+    Learn about advanced SSL configuration and certificate management
+  </Card>
+  
+  <Card title="Environment Variables" icon="gear" href="/configuration/environment">
+    Use environment interpolation for dynamic domain configuration
+  </Card>
+  
+  <Card title="Load Balancing" icon="scale-balanced" href="/reference/primitives/app/service">
+    Understand how traffic is routed to your services
+  </Card>
+  
+  <Card title="Deploying Changes" icon="upload" href="/deployment/deploying-changes">
+    Deploy your custom domain configuration
+  </Card>
+</CardGroup>

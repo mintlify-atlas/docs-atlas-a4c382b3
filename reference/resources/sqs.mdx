@@ -1,0 +1,644 @@
+---
+title: "SQS"
+description: "AWS SQS message queue for your Convox applications"
+---
+
+## Overview
+
+Amazon SQS (Simple Queue Service) is a fully managed message queuing service for decoupling and scaling microservices, distributed systems, and serverless applications. While Convox doesn't provision SQS queues automatically, you can easily connect your application to SQS using resource overlays.
+
+## Setup Method
+
+SQS queues are connected to Convox applications via resource overlays - manually setting environment variables that contain queue URLs and AWS credentials.
+
+## Creating an SQS Queue
+
+Create an SQS queue using the AWS CLI, Console, or Infrastructure as Code:
+
+<Tabs>
+  <Tab title="AWS CLI">
+    ```bash
+    # Create standard queue
+    aws sqs create-queue --queue-name my-app-jobs
+    
+    # Create FIFO queue (for ordered messages)
+    aws sqs create-queue \
+      --queue-name my-app-jobs.fifo \
+      --attributes FifoQueue=true,ContentBasedDeduplication=true
+    
+    # Enable dead letter queue (recommended)
+    aws sqs create-queue --queue-name my-app-jobs-dlq
+    
+    # Get queue URL
+    aws sqs get-queue-url --queue-name my-app-jobs
+    ```
+  </Tab>
+  <Tab title="Terraform">
+    ```hcl
+    # Standard queue
+    resource "aws_sqs_queue" "jobs" {
+      name                      = "my-app-jobs"
+      visibility_timeout_seconds = 300
+      message_retention_seconds = 1209600  # 14 days
+      
+      redrive_policy = jsonencode({
+        deadLetterTargetArn = aws_sqs_queue.jobs_dlq.arn
+        maxReceiveCount     = 3
+      })
+    }
+    
+    # Dead letter queue
+    resource "aws_sqs_queue" "jobs_dlq" {
+      name = "my-app-jobs-dlq"
+    }
+    
+    # FIFO queue
+    resource "aws_sqs_queue" "jobs_fifo" {
+      name                        = "my-app-jobs.fifo"
+      fifo_queue                  = true
+      content_based_deduplication = true
+      visibility_timeout_seconds  = 300
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Queue Types
+
+### Standard Queue
+
+- **Unlimited throughput**: Nearly unlimited messages per second
+- **At-least-once delivery**: Messages delivered at least once, but occasionally duplicated
+- **Best-effort ordering**: Messages generally delivered in order, but not guaranteed
+
+### FIFO Queue
+
+- **High throughput**: Up to 3,000 messages per second (with batching)
+- **Exactly-once delivery**: Messages delivered exactly once and remain available until consumed
+- **Guaranteed ordering**: Messages delivered in the exact order sent
+
+<Note>
+FIFO queues must have names ending in `.fifo` and are ideal for event ordering, transaction processing, and avoiding duplicates.
+</Note>
+
+## IAM Permissions
+
+Create an IAM user or role with SQS access:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sqs:SendMessage",
+        "sqs:ReceiveMessage",
+        "sqs:DeleteMessage",
+        "sqs:GetQueueAttributes",
+        "sqs:GetQueueUrl"
+      ],
+      "Resource": "arn:aws:sqs:us-east-1:123456789012:my-app-jobs"
+    }
+  ]
+}
+```
+
+<Note>
+For production, use IAM roles when running on AWS (via IRSA for EKS) instead of static credentials.
+</Note>
+
+## Connecting to Convox
+
+Define a placeholder resource in `convox.yml`:
+
+```yaml
+resources:
+  jobs:
+    type: sqs
+
+services:
+  web:
+    resources:
+      - jobs
+  worker:
+    resources:
+      - jobs
+```
+
+<Warning>
+The `sqs` resource type is not natively supported by Convox. This is a placeholder that you'll override with environment variables.
+</Warning>
+
+Set the environment variables using resource overlays:
+
+```bash
+convox env set \
+  JOBS_QUEUE_URL=https://sqs.us-east-1.amazonaws.com/123456789012/my-app-jobs \
+  JOBS_REGION=us-east-1 \
+  JOBS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE \
+  JOBS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY \
+  -a myapp -r production
+```
+
+## Environment Variables
+
+Your application will have access to these environment variables:
+
+<ParamField path="RESOURCE_QUEUE_URL" type="string" required>
+  The full SQS queue URL
+</ParamField>
+
+<ParamField path="RESOURCE_REGION" type="string" required>
+  The AWS region where the queue is located
+</ParamField>
+
+<ParamField path="RESOURCE_ACCESS_KEY_ID" type="string">
+  AWS access key ID (not needed if using IAM roles)
+</ParamField>
+
+<ParamField path="RESOURCE_SECRET_ACCESS_KEY" type="string">
+  AWS secret access key (not needed if using IAM roles)
+</ParamField>
+
+### Example
+
+For a resource named `jobs`:
+
+```bash
+JOBS_QUEUE_URL=https://sqs.us-east-1.amazonaws.com/123456789012/my-app-jobs
+JOBS_REGION=us-east-1
+JOBS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+JOBS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+```
+
+## Usage Examples
+
+<Tabs>
+  <Tab title="Node.js">
+    ```javascript
+    const AWS = require('aws-sdk');
+    
+    const sqs = new AWS.SQS({
+      accessKeyId: process.env.JOBS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.JOBS_SECRET_ACCESS_KEY,
+      region: process.env.JOBS_REGION
+    });
+    
+    const queueUrl = process.env.JOBS_QUEUE_URL;
+    
+    // Send a message
+    async function sendMessage(data) {
+      const params = {
+        QueueUrl: queueUrl,
+        MessageBody: JSON.stringify(data),
+        MessageAttributes: {
+          JobType: {
+            DataType: 'String',
+            StringValue: 'email'
+          }
+        }
+      };
+      
+      return await sqs.sendMessage(params).promise();
+    }
+    
+    // Receive messages
+    async function receiveMessages() {
+      const params = {
+        QueueUrl: queueUrl,
+        MaxNumberOfMessages: 10,
+        WaitTimeSeconds: 20,  // Long polling
+        MessageAttributeNames: ['All']
+      };
+      
+      const data = await sqs.receiveMessage(params).promise();
+      return data.Messages || [];
+    }
+    
+    // Delete a message
+    async function deleteMessage(receiptHandle) {
+      const params = {
+        QueueUrl: queueUrl,
+        ReceiptHandle: receiptHandle
+      };
+      
+      return await sqs.deleteMessage(params).promise();
+    }
+    
+    // Worker pattern
+    async function processMessages() {
+      while (true) {
+        const messages = await receiveMessages();
+        
+        for (const message of messages) {
+          try {
+            const data = JSON.parse(message.Body);
+            // Process message
+            await processJob(data);
+            
+            // Delete message after successful processing
+            await deleteMessage(message.ReceiptHandle);
+          } catch (err) {
+            console.error('Failed to process message:', err);
+            // Message will become visible again after visibility timeout
+          }
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import boto3
+    import json
+    import os
+    
+    sqs = boto3.client(
+        'sqs',
+        aws_access_key_id=os.environ['JOBS_ACCESS_KEY_ID'],
+        aws_secret_access_key=os.environ['JOBS_SECRET_ACCESS_KEY'],
+        region_name=os.environ['JOBS_REGION']
+    )
+    
+    queue_url = os.environ['JOBS_QUEUE_URL']
+    
+    # Send a message
+    def send_message(data):
+        response = sqs.send_message(
+            QueueUrl=queue_url,
+            MessageBody=json.dumps(data),
+            MessageAttributes={
+                'JobType': {
+                    'DataType': 'String',
+                    'StringValue': 'email'
+                }
+            }
+        )
+        return response
+    
+    # Receive messages
+    def receive_messages():
+        response = sqs.receive_message(
+            QueueUrl=queue_url,
+            MaxNumberOfMessages=10,
+            WaitTimeSeconds=20,  # Long polling
+            MessageAttributeNames=['All']
+        )
+        return response.get('Messages', [])
+    
+    # Delete a message
+    def delete_message(receipt_handle):
+        sqs.delete_message(
+            QueueUrl=queue_url,
+            ReceiptHandle=receipt_handle
+        )
+    
+    # Worker pattern
+    def process_messages():
+        while True:
+            messages = receive_messages()
+            
+            for message in messages:
+                try:
+                    data = json.loads(message['Body'])
+                    # Process message
+                    process_job(data)
+                    
+                    # Delete message after successful processing
+                    delete_message(message['ReceiptHandle'])
+                except Exception as e:
+                    print(f'Failed to process message: {e}')
+                    # Message will become visible again
+    ```
+  </Tab>
+  <Tab title="Ruby">
+    ```ruby
+    require 'aws-sdk-sqs'
+    require 'json'
+    
+    sqs = Aws::SQS::Client.new(
+      access_key_id: ENV['JOBS_ACCESS_KEY_ID'],
+      secret_access_key: ENV['JOBS_SECRET_ACCESS_KEY'],
+      region: ENV['JOBS_REGION']
+    )
+    
+    queue_url = ENV['JOBS_QUEUE_URL']
+    
+    # Send a message
+    def send_message(data)
+      sqs.send_message(
+        queue_url: queue_url,
+        message_body: data.to_json,
+        message_attributes: {
+          'JobType' => {
+            data_type: 'String',
+            string_value: 'email'
+          }
+        }
+      )
+    end
+    
+    # Receive messages
+    def receive_messages
+      response = sqs.receive_message(
+        queue_url: queue_url,
+        max_number_of_messages: 10,
+        wait_time_seconds: 20,
+        message_attribute_names: ['All']
+      )
+      response.messages
+    end
+    
+    # Delete a message
+    def delete_message(receipt_handle)
+      sqs.delete_message(
+        queue_url: queue_url,
+        receipt_handle: receipt_handle
+      )
+    end
+    
+    # Worker pattern
+    def process_messages
+      loop do
+        messages = receive_messages
+        
+        messages.each do |message|
+          begin
+            data = JSON.parse(message.body)
+            # Process message
+            process_job(data)
+            
+            # Delete message after successful processing
+            delete_message(message.receipt_handle)
+          rescue => e
+            puts "Failed to process message: #{e.message}"
+          end
+        end
+      end
+    end
+    ```
+  </Tab>
+  <Tab title="Go">
+    ```go
+    package main
+    
+    import (
+        "encoding/json"
+        "os"
+        "github.com/aws/aws-sdk-go/aws"
+        "github.com/aws/aws-sdk-go/aws/credentials"
+        "github.com/aws/aws-sdk-go/aws/session"
+        "github.com/aws/aws-sdk-go/service/sqs"
+    )
+    
+    func main() {
+        sess := session.Must(session.NewSession(&aws.Config{
+            Region: aws.String(os.Getenv("JOBS_REGION")),
+            Credentials: credentials.NewStaticCredentials(
+                os.Getenv("JOBS_ACCESS_KEY_ID"),
+                os.Getenv("JOBS_SECRET_ACCESS_KEY"),
+                "",
+            ),
+        }))
+        
+        svc := sqs.New(sess)
+        queueURL := os.Getenv("JOBS_QUEUE_URL")
+        
+        // Send message
+        data, _ := json.Marshal(map[string]string{"task": "send_email"})
+        svc.SendMessage(&sqs.SendMessageInput{
+            QueueUrl:    aws.String(queueURL),
+            MessageBody: aws.String(string(data)),
+        })
+        
+        // Receive messages
+        result, _ := svc.ReceiveMessage(&sqs.ReceiveMessageInput{
+            QueueUrl:            aws.String(queueURL),
+            MaxNumberOfMessages: aws.Int64(10),
+            WaitTimeSeconds:     aws.Int64(20),
+        })
+        
+        for _, message := range result.Messages {
+            // Process message
+            
+            // Delete message
+            svc.DeleteMessage(&sqs.DeleteMessageInput{
+                QueueUrl:      aws.String(queueURL),
+                ReceiptHandle: message.ReceiptHandle,
+            })
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Worker Pattern
+
+A typical SQS worker pattern in `convox.yml`:
+
+```yaml
+resources:
+  jobs:
+    type: sqs
+
+services:
+  web:
+    build: .
+    port: 3000
+    resources:
+      - jobs
+  
+  worker:
+    build: .
+    command: npm run worker
+    resources:
+      - jobs
+```
+
+The worker service continuously polls SQS for messages and processes them.
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Long Polling" icon="clock">
+    Set `WaitTimeSeconds` to 20 to reduce empty responses and lower costs.
+  </Card>
+  <Card title="Configure Dead Letter Queues" icon="skull">
+    Set up DLQs to capture messages that fail processing after multiple attempts.
+  </Card>
+  <Card title="Use IAM Roles" icon="user-shield">
+    When running on AWS, use IAM roles (IRSA for EKS) instead of static credentials.
+  </Card>
+  <Card title="Set Visibility Timeout" icon="eye-slash">
+    Configure visibility timeout longer than your processing time to prevent duplicate processing.
+  </Card>
+  <Card title="Batch Operations" icon="layer-group">
+    Use batch send/receive operations to reduce API calls and costs.
+  </Card>
+  <Card title="Handle Failures Gracefully" icon="shield-halved">
+    Don't delete messages until processing succeeds. Let visibility timeout handle retries.
+  </Card>
+</CardGroup>
+
+## Common Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Background Jobs" icon="gears">
+    Process time-consuming tasks (email sending, image processing, reports) asynchronously.
+  </Card>
+  <Card title="Event-Driven Architecture" icon="diagram-project">
+    Decouple microservices with event messages between services.
+  </Card>
+  <Card title="Load Leveling" icon="chart-line">
+    Buffer requests during traffic spikes and process them at a steady rate.
+  </Card>
+  <Card title="Order Processing" icon="cart-shopping">
+    Use FIFO queues to maintain order of operations in transaction workflows.
+  </Card>
+</CardGroup>
+
+## Configuration Options
+
+### Visibility Timeout
+
+Time a message is invisible after being received (30 seconds to 12 hours):
+
+```bash
+aws sqs set-queue-attributes \
+  --queue-url $QUEUE_URL \
+  --attributes VisibilityTimeout=300
+```
+
+### Message Retention
+
+How long messages stay in queue (1 minute to 14 days):
+
+```bash
+aws sqs set-queue-attributes \
+  --queue-url $QUEUE_URL \
+  --attributes MessageRetentionPeriod=1209600
+```
+
+### Dead Letter Queue
+
+```bash
+aws sqs set-queue-attributes \
+  --queue-url $QUEUE_URL \
+  --attributes '{
+    "RedrivePolicy": "{
+      \"deadLetterTargetArn\":\"arn:aws:sqs:us-east-1:123456789012:my-app-jobs-dlq\",
+      \"maxReceiveCount\":\"3\"
+    }"
+  }'
+```
+
+## Monitoring
+
+Key CloudWatch metrics to monitor:
+
+- **ApproximateNumberOfMessagesVisible**: Messages available for processing
+- **ApproximateAgeOfOldestMessage**: Age of oldest message in queue
+- **NumberOfMessagesSent**: Messages added to queue
+- **NumberOfMessagesReceived**: Messages retrieved from queue
+- **NumberOfMessagesDeleted**: Messages successfully processed
+
+<Note>
+Set CloudWatch alarms for queue depth and message age to detect processing bottlenecks.
+</Note>
+
+## Example Configurations
+
+<Tabs>
+  <Tab title="Basic">
+    ```yaml
+    # convox.yml
+    resources:
+      jobs:
+        type: sqs
+    
+    services:
+      web:
+        resources:
+          - jobs
+      worker:
+        command: npm run worker
+        resources:
+          - jobs
+    ```
+    
+    ```bash
+    # Set environment variables
+    convox env set \
+      JOBS_QUEUE_URL=https://sqs.us-east-1.amazonaws.com/123456789012/my-app-jobs \
+      JOBS_REGION=us-east-1 \
+      JOBS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+      JOBS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+      -a myapp
+    ```
+  </Tab>
+  <Tab title="Multiple Queues">
+    ```yaml
+    # convox.yml
+    resources:
+      jobs:
+        type: sqs
+      notifications:
+        type: sqs
+    
+    services:
+      web:
+        resources:
+          - jobs
+          - notifications
+      job-worker:
+        command: npm run job-worker
+        resources:
+          - jobs
+      notification-worker:
+        command: npm run notification-worker
+        resources:
+          - notifications
+    ```
+    
+    ```bash
+    # Set environment variables for both queues
+    convox env set \
+      JOBS_QUEUE_URL=https://sqs.us-east-1.amazonaws.com/123456789012/my-app-jobs \
+      JOBS_REGION=us-east-1 \
+      NOTIFICATIONS_QUEUE_URL=https://sqs.us-east-1.amazonaws.com/123456789012/my-app-notifications \
+      NOTIFICATIONS_REGION=us-east-1 \
+      -a myapp
+    ```
+  </Tab>
+  <Tab title="FIFO Queue">
+    ```yaml
+    # convox.yml
+    resources:
+      orders:
+        type: sqs
+    
+    services:
+      api:
+        resources:
+          - orders
+      order-processor:
+        command: python process_orders.py
+        resources:
+          - orders
+    ```
+    
+    ```bash
+    # Create FIFO queue
+    aws sqs create-queue \
+      --queue-name my-app-orders.fifo \
+      --attributes FifoQueue=true,ContentBasedDeduplication=true
+    
+    # Set environment variables
+    convox env set \
+      ORDERS_QUEUE_URL=https://sqs.us-east-1.amazonaws.com/123456789012/my-app-orders.fifo \
+      ORDERS_REGION=us-east-1 \
+      -a myapp
+    ```
+  </Tab>
+</Tabs>

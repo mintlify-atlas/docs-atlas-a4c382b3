@@ -1,0 +1,607 @@
+---
+title: "Scaling"
+description: "Scale your Convox applications horizontally and vertically with autoscaling support"
+---
+
+Convox allows you to scale any [Service](/reference/primitives/app/service) along multiple dimensions to meet your application's performance and capacity requirements.
+
+## Scaling Dimensions
+
+<CardGroup cols={2}>
+  <Card title="Horizontal Scaling" icon="left-right">
+    **Process Count**: Number of concurrent [Processes](/reference/primitives/app/process) running
+    
+    Ideal for handling more requests and providing redundancy
+  </Card>
+  
+  <Card title="Vertical Scaling" icon="up-down">
+    **CPU**: CPU allocation in units (1000 = 1 full CPU)
+    
+    **Memory**: RAM allocation in megabytes
+    
+    **GPU**: Number of GPUs per process
+    
+    Ideal for resource-intensive operations
+  </Card>
+</CardGroup>
+
+## Initial Scale Configuration
+
+Define default scale settings in your `convox.yml`:
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    scale:
+      count: 2
+      cpu: 256
+      memory: 512
+```
+
+<Note>
+Static count values are only used on first deployment. Subsequent count changes must be made via the CLI to prevent configuration drift.
+</Note>
+
+### Scale Attributes
+
+| Attribute | Unit | Description |
+|-----------|------|-------------|
+| **count** | number | Number of processes (1-n) |
+| **cpu** | CPU units | 1000 units = 1 full CPU core |
+| **memory** | MB | RAM allocation in megabytes |
+| **gpu** | number | GPUs allocated per process (requires GPU-enabled rack) |
+
+## Manual Scaling
+
+Manually adjust your service scale using the Convox CLI.
+
+### Check Current Scale
+
+View the current scale for all services:
+
+```bash
+$ convox scale -a myapp
+NAME  DESIRED  RUNNING  CPU  MEMORY
+web   2        2        256  512
+api   1        1        512  1024
+```
+
+### Scale Process Count
+
+Change the number of processes for a service:
+
+<CodeGroup>
+```bash Scale Up
+$ convox scale web --count=5 -a myapp
+Scaling web...
+2020-01-01T00:00:00Z system/k8s/web Scaled up replica set web-65f45567d to 5
+2020-01-01T00:00:00Z system/k8s/web-65f45567d Created pod: web-65f45567d-c7sdw
+2020-01-01T00:00:00Z system/k8s/web-65f45567d Created pod: web-65f45567d-m9kpx
+2020-01-01T00:00:00Z system/k8s/web-65f45567d Created pod: web-65f45567d-x2rty
+2020-01-01T00:00:00Z system/k8s/web-65f45567d-c7sdw Successfully assigned dev-convox/web-65f45567d-c7sdw to node
+2020-01-01T00:00:00Z system/k8s/web-65f45567d-c7sdw Container image "registry.dev.convox/convox:web.BABCDEFGHI" already present on machine
+2020-01-01T00:00:00Z system/k8s/web-65f45567d-c7sdw Created container main
+2020-01-01T00:00:00Z system/k8s/web-65f45567d-c7sdw Started container main
+OK
+```
+
+```bash Scale Down
+$ convox scale web --count=1 -a myapp
+Scaling web...
+2020-01-01T00:00:10Z system/k8s/web Scaled down replica set web-65f45567d to 1
+OK
+```
+</CodeGroup>
+
+<Tip>
+Scaling is gradual and respects health checks, ensuring no downtime during the scaling operation.
+</Tip>
+
+### Scale CPU and Memory
+
+To change CPU or memory allocation, update your `convox.yml` and deploy:
+
+<Steps>
+  <Step title="Update convox.yml">
+    ```yaml
+    services:
+      web:
+        build: .
+        port: 3000
+        scale:
+          cpu: 512    # Changed from 256
+          memory: 1024  # Changed from 512
+    ```
+  </Step>
+  
+  <Step title="Deploy the changes">
+    ```bash
+    $ convox deploy -a myapp
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+CPU and memory changes require a new deployment. You cannot change these values with the `convox scale` command.
+</Warning>
+
+## Autoscaling
+
+Configure autoscaling to automatically adjust process count based on resource utilization.
+
+### Basic Autoscaling
+
+Define a scale range and target metrics:
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    scale:
+      count: 2-10
+      cpu: 256
+      memory: 512
+      targets:
+        cpu: 70
+        memory: 80
+```
+
+### Autoscaling Configuration
+
+| Attribute | Example | Description |
+|-----------|---------|-------------|
+| **count** | 2-10 | Min-Max range for process count |
+| **targets.cpu** | 70 | Target CPU utilization percentage |
+| **targets.memory** | 80 | Target memory utilization percentage |
+
+### How Autoscaling Works
+
+<Steps>
+  <Step title="Monitor metrics">
+    Kubernetes continuously monitors CPU and memory utilization across all processes.
+  </Step>
+  
+  <Step title="Calculate average">
+    The average utilization is calculated across all running processes.
+  </Step>
+  
+  <Step title="Compare to target">
+    If average utilization exceeds the target, scale up. If it's below, scale down.
+  </Step>
+  
+  <Step title="Adjust replicas">
+    The number of processes is adjusted to maintain the target utilization.
+  </Step>
+</Steps>
+
+### Scaling Formula
+
+Kubernetes uses this formula to calculate desired replicas:
+
+```
+desiredReplicas = ceil[currentReplicas × (currentMetricValue / desiredMetricValue)]
+```
+
+**Example**:
+- Current replicas: 4
+- Current CPU utilization: 85%
+- Target CPU utilization: 70%
+- Calculation: ceil[4 × (85 / 70)] = ceil[4.86] = 5 replicas
+
+### Multiple Targets
+
+You can set both CPU and memory targets:
+
+```yaml
+services:
+  worker:
+    build: .
+    scale:
+      count: 1-20
+      cpu: 512
+      memory: 1024
+      targets:
+        cpu: 60
+        memory: 75
+```
+
+The autoscaler will scale based on whichever metric requires more replicas.
+
+## GPU Scaling
+
+For machine learning, video processing, and scientific computing workloads, Convox supports GPU allocation.
+
+### Prerequisites
+
+<Steps>
+  <Step title="Use GPU-capable instances">
+    Your rack must run on GPU-enabled instances:
+    - AWS: p3, p4, g4, g5 families
+    - GCP: N1 with GPU accelerators
+    - Azure: NC, ND, NV series
+  </Step>
+  
+  <Step title="Enable NVIDIA device plugin">
+    ```bash
+    $ convox rack params set nvidia_device_plugin_enable=true -r myRack
+    ```
+  </Step>
+</Steps>
+
+### Basic GPU Configuration
+
+```yaml
+services:
+  ml-trainer:
+    build: .
+    command: python train.py
+    scale:
+      count: 1
+      cpu: 2000
+      memory: 8192
+      gpu: 1
+```
+
+### GPU with Autoscaling
+
+Combine GPU allocation with autoscaling:
+
+```yaml
+services:
+  ml-inference:
+    build: .
+    command: python serve.py
+    scale:
+      count: 1-5
+      cpu: 2000
+      memory: 4096
+      gpu: 1
+      targets:
+        cpu: 80
+```
+
+Each process will have access to one GPU, and the service will scale from 1 to 5 processes based on CPU utilization.
+
+### GPU Considerations
+
+<CardGroup cols={2}>
+  <Card title="Whole Units Only" icon="microchip">
+    GPUs are allocated as whole units. You cannot request fractional GPUs.
+  </Card>
+  
+  <Card title="Node Affinity" icon="server">
+    Processes requesting GPUs will only be scheduled on nodes with available GPUs.
+  </Card>
+  
+  <Card title="CUDA Support" icon="code">
+    Use base images that include the NVIDIA CUDA toolkit (e.g., `nvidia/cuda:11.8.0-runtime-ubuntu22.04`).
+  </Card>
+  
+  <Card title="Resource Costs" icon="dollar-sign">
+    GPU instances are significantly more expensive than standard instances.
+  </Card>
+</CardGroup>
+
+### Example GPU Configuration
+
+```yaml
+services:
+  model-training:
+    build: .
+    dockerfile: Dockerfile.gpu
+    command: python train_model.py
+    scale:
+      count: 2
+      cpu: 4000
+      memory: 16384
+      gpu: 2
+    environment:
+      - CUDA_VISIBLE_DEVICES=0,1
+```
+
+This configuration:
+- Runs 2 processes
+- Each process gets 2 GPUs
+- Total GPU requirement: 4 GPUs
+
+## Advanced Autoscaling
+
+### Custom Metrics with Datadog
+
+Autoscale based on custom metrics from Datadog.
+
+#### Prerequisites
+
+<Steps>
+  <Step title="Install Datadog">
+    Install Datadog and the Datadog Cluster Agent on your rack. Use `datadog-agent-all-features.yaml` for the complete setup.
+  </Step>
+  
+  <Step title="Verify installation">
+    ```bash
+    $ kubectl get pods
+    NAME                                    READY   STATUS    RESTARTS   AGE
+    datadog-bjw2m                           5/5     Running   0          16m
+    datadog-cluster-agent-b5fd4b7f5-tmkql   1/1     Running   0          16m
+    ```
+  </Step>
+  
+  <Step title="Configure external metrics">
+    Follow [Datadog's documentation](https://docs.datadoghq.com/containers/guide/cluster_agent_autoscaling_metrics/) to configure the external metrics provider.
+  </Step>
+</Steps>
+
+#### Create DatadogMetric
+
+Define a custom metric:
+
+```yaml
+apiVersion: datadoghq.com/v1alpha1
+kind: DatadogMetric
+metadata:
+  name: page-views-metrics
+spec:
+  query: avg:page.views{*}.as_count()
+```
+
+Apply it:
+
+```bash
+$ kubectl apply -f page-views-metrics.yaml
+```
+
+#### Configure Service
+
+Reference the metric in your `convox.yml`:
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    environment:
+      - DD_AGENT_HOST=dd-agent.default.svc.cluster.local
+    scale:
+      count: 1-10
+      targets:
+        external:
+          - name: "datadogmetric@default:page-views-metrics"
+            averageValue: 100
+```
+
+The format for external metrics is:
+```
+datadogmetric@<namespace>:<metric-name>
+```
+
+#### Deploy Datadog Service
+
+Create a service for your app to send metrics:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: dd-agent
+spec:
+  selector:
+    app: datadog
+  ports:
+    - protocol: UDP
+      port: 8125
+      targetPort: 8125
+```
+
+Apply it:
+
+```bash
+$ kubectl apply -f dd-agent-service.yaml
+```
+
+#### Test Autoscaling
+
+Generate load to trigger scaling:
+
+```bash
+$ while true; do curl https://your-app-url/; sleep 0.2; done
+```
+
+Monitor process count:
+
+```bash
+$ convox ps -a myapp
+ID                    SERVICE  STATUS   RELEASE      STARTED         COMMAND
+web-5675cccf75-chmcc  web      running  RAZUSIKBQGX  25 seconds ago
+web-5675cccf75-dm6kb  web      running  RAZUSIKBQGX  6 minutes ago
+web-5675cccf75-xk9tz  web      running  RAZUSIKBQGX  10 seconds ago
+```
+
+## Scaling Strategies
+
+### High Availability
+
+For mission-critical services, maintain minimum redundancy:
+
+```yaml
+services:
+  api:
+    build: .
+    port: 8080
+    scale:
+      count: 3-20
+      cpu: 512
+      memory: 1024
+      targets:
+        cpu: 60
+        memory: 70
+```
+
+Benefits:
+- Always at least 3 instances running
+- Survives multiple instance failures
+- Rolling updates maintain capacity
+
+### Cost Optimization
+
+For development or low-traffic environments:
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    scale:
+      count: 1-3
+      cpu: 256
+      memory: 512
+      targets:
+        cpu: 80
+        memory: 85
+```
+
+Benefits:
+- Minimal resource usage when idle
+- Aggressive scaling targets reduce costs
+- Suitable for non-critical workloads
+
+### Burst Capacity
+
+For services with unpredictable traffic spikes:
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    scale:
+      count: 2-50
+      cpu: 512
+      memory: 1024
+      targets:
+        cpu: 50
+        memory: 60
+```
+
+Benefits:
+- Low baseline for normal traffic
+- Can scale rapidly for traffic spikes
+- Conservative targets trigger scaling early
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Start Conservative" icon="gauge-low">
+    Begin with lower resource allocations and scale up based on actual usage patterns.
+  </Card>
+  
+  <Card title="Monitor Performance" icon="chart-line">
+    Use monitoring tools to understand your application's resource utilization over time.
+  </Card>
+  
+  <Card title="Test Scaling" icon="flask">
+    Load test your application to verify autoscaling behavior before production.
+  </Card>
+  
+  <Card title="Set Appropriate Ranges" icon="sliders">
+    Define min/max count ranges that prevent both resource starvation and excessive costs.
+  </Card>
+  
+  <Card title="Use Multiple Services" icon="layer-group">
+    Separate different workload types into different services with independent scaling.
+  </Card>
+  
+  <Card title="Plan for Failure" icon="shield-halved">
+    Always run at least 2 processes for critical services to ensure availability.
+  </Card>
+  
+  <Card title="Consider Costs" icon="money-bill">
+    Balance performance needs with infrastructure costs, especially for GPU instances.
+  </Card>
+  
+  <Card title="Document Decisions" icon="book">
+    Record why you chose specific scale settings for future reference.
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### Processes Not Scaling
+
+**Symptoms**: Process count doesn't change despite high load
+
+**Possible causes**:
+- Autoscaling not configured
+- Insufficient rack resources
+- Metrics not being collected
+
+**Solutions**:
+1. Verify autoscaling config in `convox.yml`
+2. Check rack capacity: `convox rack`
+3. Review Kubernetes HPA status: `kubectl get hpa -n convox-myapp`
+
+### Autoscaling Too Aggressive
+
+**Symptoms**: Constantly scaling up and down
+
+**Possible causes**:
+- Targets set too low
+- Application has bursty workload patterns
+- Not enough processes at minimum
+
+**Solutions**:
+1. Increase target percentages (e.g., 70 → 80)
+2. Increase minimum process count
+3. Smooth out workload with queues
+
+### Out of Memory Errors
+
+**Symptoms**: Processes crash with OOM errors
+
+**Possible causes**:
+- Memory allocation too low
+- Memory leaks in application
+- Unexpected traffic spikes
+
+**Solutions**:
+1. Increase memory allocation in `convox.yml`
+2. Profile application for memory leaks
+3. Implement better autoscaling targets
+4. Add memory-based autoscaling
+
+### GPU Not Available
+
+**Symptoms**: Processes requesting GPU stuck in pending
+
+**Possible causes**:
+- No GPU nodes available
+- NVIDIA device plugin not installed
+- All GPUs already allocated
+
+**Solutions**:
+1. Verify GPU instances in rack
+2. Check NVIDIA plugin: `kubectl get pods -n kube-system | grep nvidia`
+3. Review node resources: `kubectl describe nodes`
+4. Scale down other GPU processes
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Health Checks" icon="heart-pulse" href="/configuration/health-checks">
+    Configure health monitoring for scaled services
+  </Card>
+  
+  <Card title="Rolling Updates" icon="rotate" href="/deployment/rolling-updates">
+    Understand how scaling affects deployments
+  </Card>
+  
+  <Card title="Monitoring" icon="chart-mixed" href="/integrations/monitoring/datadog">
+    Set up comprehensive monitoring and alerting
+  </Card>
+  
+  <Card title="Load Balancing" icon="scale-balanced" href="/reference/primitives/app/service">
+    Learn how traffic is distributed across processes
+  </Card>
+</CardGroup>

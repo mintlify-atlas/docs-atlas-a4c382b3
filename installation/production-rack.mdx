@@ -1,0 +1,603 @@
+---
+title: Production Rack
+description: Install a Convox rack on AWS, Google Cloud, Azure, or Digital Ocean
+---
+
+A production rack runs on a cloud provider and provides the infrastructure for deploying and running your applications in staging or production environments.
+
+## Installation Methods
+
+<CardGroup cols={2}>
+  <Card title="Web Console (Recommended)" icon="browser" href="https://console.convox.com">
+    Install and manage racks through the visual web interface
+  </Card>
+  <Card title="CLI Installation" icon="terminal" href="#cli-installation">
+    Install racks using the command-line interface
+  </Card>
+</CardGroup>
+
+<Note>
+  We recommend installing production racks using the [Convox Web Console](https://console.convox.com). It provides automatic updates, monitoring, team collaboration, and easier management.
+</Note>
+
+<Warning>
+  If you install via the CLI and later want to manage your rack from the Web Console, you will need to [move your rack](/management/console-rack-management) into the console first.
+</Warning>
+
+## Supported Cloud Providers
+
+Convox supports installation on the following cloud providers:
+
+<CardGroup cols={2}>
+  <Card title="Amazon Web Services" icon="aws" href="#amazon-web-services">
+    Deploy to AWS with EKS
+  </Card>
+  <Card title="Google Cloud Platform" icon="google" href="#google-cloud-platform">
+    Deploy to GCP with GKE
+  </Card>
+  <Card title="Microsoft Azure" icon="microsoft" href="#microsoft-azure">
+    Deploy to Azure with AKS
+  </Card>
+  <Card title="Digital Ocean" icon="digital-ocean" href="#digital-ocean">
+    Deploy to Digital Ocean with DOKS
+  </Card>
+</CardGroup>
+
+---
+
+## Amazon Web Services
+
+### Prerequisites
+
+<Steps>
+  <Step title="Install the AWS CLI">
+    Install and configure the [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html).
+  </Step>
+  
+  <Step title="Install Terraform">
+    Install [Terraform](https://learn.hashicorp.com/terraform/getting-started/install.html) for infrastructure provisioning.
+  </Step>
+  
+  <Step title="Install Convox CLI">
+    Follow the [CLI installation guide](/installation/cli).
+  </Step>
+</Steps>
+
+### Setup AWS Credentials
+
+<Steps>
+  <Step title="Create IAM user">
+    Create a dedicated IAM user for Convox:
+    
+    ```bash
+    aws iam create-user --user-name convox
+    aws iam attach-user-policy --user-name convox --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
+    aws iam create-access-key --user-name convox
+    ```
+  </Step>
+  
+  <Step title="Set environment variables">
+    Export the credentials from the access key creation output:
+    
+    ```bash
+    export AWS_ACCESS_KEY_ID=<AccessKeyId>
+    export AWS_SECRET_ACCESS_KEY=<SecretAccessKey>
+    ```
+  </Step>
+</Steps>
+
+### Install Rack
+
+```bash
+convox rack install aws <rack-name> [param1=value1]...
+```
+
+**Example:**
+```bash
+convox rack install aws production region=us-west-2 node_type=t3.medium
+```
+
+### Key Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `region` | `us-east-1` | AWS region for the rack |
+| `node_type` | `t3.small` | EC2 instance type for cluster nodes |
+| `node_disk` | `20` | Node disk size in GB |
+| `high_availability` | `true` | Create redundant resources across AZs |
+| `private` | `true` | Place nodes in private subnets behind NAT |
+| `node_capacity_type` | `on_demand` | Can be `on_demand`, `spot`, or `mixed` |
+| `availability_zones` | (auto) | Override automatic AZ selection (min 3) |
+| `cidr` | `10.1.0.0/16` | CIDR range for VPC |
+| `idle_timeout` | `3600` | Load balancer idle timeout in seconds |
+
+<Tip>
+  Use `node_capacity_type=spot` for cost savings in non-critical environments. For production, use `mixed` with `min_on_demand_count` to ensure availability.
+</Tip>
+
+### Advanced Configuration
+
+<Accordion title="Network Configuration">
+  - **vpc_id**: Use existing VPC (requires `cidr` and `internet_gateway_id`)
+  - **private_subnets_ids**: Existing private subnets (comma-separated, 3 for HA)
+  - **public_subnets_ids**: Existing public subnets (comma-separated, 3 for HA)
+  - **internal_router**: Install internal load balancer within VPC
+  - **proxy_protocol**: Enable proxy protocol for client source IP (requires downtime)
+</Accordion>
+
+<Accordion title="Security & Access">
+  - **key_pair_name**: AWS key pair for SSH access
+  - **nlb_security_group**: Security group ID for NLB
+  - **imds_http_tokens**: IMDSv2 requirement (`optional` or `required`)
+  - **ssl_ciphers**: Custom SSL ciphers for nginx (colon-separated)
+  - **ssl_protocols**: SSL protocols for nginx (space-separated, e.g., `TLSv1.2 TLSv1.3`)
+</Accordion>
+
+<Accordion title="Scaling & Scheduling">
+  - **min_on_demand_count**: Minimum on-demand nodes (with `mixed` capacity type)
+  - **max_on_demand_count**: Maximum on-demand nodes (with `mixed` capacity type)
+  - **schedule_rack_scale_down**: Unix cron for scale down (e.g., `0 18 * * 5`)
+  - **schedule_rack_scale_up**: Unix cron for scale up (e.g., `0 0 * * 0`)
+  - **node_max_unavailable_percentage**: Max unavailable % during updates (1-100)
+</Accordion>
+
+<Accordion title="Features & Add-ons">
+  - **build_node_enabled**: Enable dedicated build nodes
+  - **build_node_type**: Instance type for build nodes
+  - **efs_csi_driver_enable**: Enable AWS EFS volume support
+  - **pod_identity_agent_enable**: Enable AWS pod identity
+  - **fluentd_disable**: Disable fluentd logging
+  - **convox_domain_tls_cert_disable**: Disable *.convox.cloud TLS certs
+</Accordion>
+
+<Accordion title="Monitoring & Logging">
+  - **syslog**: Forward logs to syslog endpoint (e.g., `tcp+tls://example.org:1234`)
+  - **access_log_retention_in_days**: Nginx access log retention in CloudWatch (default: 7)
+  - **cert_duration**: Certificate renewal period (default: `2160h`)
+  - **tags**: Custom AWS resource tags (e.g., `key1=val1,key2=val2`)
+</Accordion>
+
+### Cluster Endpoint Access
+
+Configure EKS API server endpoint access through the Convox Console under **Rack Settings** > **Security**:
+
+- **Public** (default): Externally accessible with security controls
+- **Public-Private**: Hybrid mode for both external and in-VPC access
+- **Semi-Private**: Temporarily public during updates, private otherwise
+- **Private**: VPC-only access (requires rack version 3.18.9+)
+
+<Note>
+  Private mode requires rack version 3.18.9+. Public-Private mode requires 3.22.4+.
+</Note>
+
+---
+
+## Google Cloud Platform
+
+### Prerequisites
+
+<Steps>
+  <Step title="Install Google Cloud CLI">
+    Install the [Google Cloud CLI](https://cloud.google.com/sdk/docs/#install_the_latest_cloud_tools_version_cloudsdk_current_version) and run:
+    
+    ```bash
+    gcloud init
+    ```
+  </Step>
+  
+  <Step title="Install Terraform">
+    Install [Terraform](https://learn.hashicorp.com/terraform/getting-started/install.html).
+  </Step>
+  
+  <Step title="Install Convox CLI">
+    Follow the [CLI installation guide](/installation/cli).
+  </Step>
+</Steps>
+
+### Setup GCP Project
+
+<Steps>
+  <Step title="Create project">
+    Create a new GCP project:
+    
+    ```bash
+    gcloud projects create <project-id> --set-as-default
+    ```
+    
+    <Warning>
+      Enable billing for this project at [console.cloud.google.com/billing](https://console.cloud.google.com/billing) before proceeding.
+    </Warning>
+    
+    Set the environment variable:
+    ```bash
+    export GOOGLE_PROJECT=<project-id>
+    ```
+  </Step>
+  
+  <Step title="Create service account">
+    Create a service account for Convox:
+    
+    ```bash
+    serviceaccount="convox@${GOOGLE_PROJECT}.iam.gserviceaccount.com"
+    gcloud iam service-accounts create convox
+    gcloud iam service-accounts keys create ~/.gcloud.convox --iam-account="${serviceaccount}"
+    ```
+    
+    Set the environment variable:
+    ```bash
+    export GOOGLE_CREDENTIALS=~/.gcloud.convox
+    ```
+  </Step>
+  
+  <Step title="Grant permissions">
+    Grant owner role to the service account:
+    
+    ```bash
+    gcloud projects add-iam-policy-binding ${GOOGLE_PROJECT} \
+      --member="serviceAccount:${serviceaccount}" \
+      --role="roles/owner"
+    ```
+  </Step>
+  
+  <Step title="Enable required APIs">
+    Enable necessary GCP APIs:
+    
+    ```bash
+    gcloud services enable cloudapis.googleapis.com
+    gcloud services enable compute.googleapis.com
+    gcloud services enable cloudresourcemanager.googleapis.com
+    gcloud services enable container.googleapis.com
+    gcloud services enable serviceusage.googleapis.com
+    gcloud services enable servicemanagement.googleapis.com
+    ```
+  </Step>
+</Steps>
+
+### Install Rack
+
+```bash
+convox rack install gcp <rack-name> [param1=value1]...
+```
+
+**Example:**
+```bash
+convox rack install gcp production region=us-west1 node_type=n1-standard-2
+```
+
+### Available Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `region` | `us-east1` | GCP region |
+| `node_type` | `n1-standard-1` | Node instance type |
+| `preemptible` | `true` | Use preemptible instances (spot equivalent) |
+| `cert_duration` | `2160h` | Certificate renewal period |
+| `syslog` | | Forward logs to syslog endpoint |
+
+<Tip>
+  Preemptible instances can reduce costs by up to 80%. They're suitable for fault-tolerant workloads but may be terminated with short notice.
+</Tip>
+
+---
+
+## Microsoft Azure
+
+### Prerequisites
+
+<Steps>
+  <Step title="Install Azure CLI">
+    Install the [Azure CLI](https://docs.microsoft.com/cli/azure/install-azure-cli) and sign in:
+    
+    ```bash
+    az login
+    ```
+  </Step>
+  
+  <Step title="Install Terraform (optional)">
+    Install [Terraform](https://developer.hashicorp.com/terraform/tutorials) for infrastructure management.
+  </Step>
+  
+  <Step title="Install Convox CLI">
+    Follow the [CLI installation guide](/installation/cli).
+  </Step>
+</Steps>
+
+### Configure Azure Environment
+
+<Steps>
+  <Step title="Select subscription">
+    List and select your Azure subscription:
+    
+    ```bash
+    # List available subscriptions
+    az account list --output table
+    
+    # Set your subscription
+    az account set --subscription <SUBSCRIPTION_ID>
+    
+    # Export for later use
+    export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+    echo "Subscription ID: $ARM_SUBSCRIPTION_ID"
+    ```
+  </Step>
+  
+  <Step title="Create service principal">
+    Create a service principal with Owner role:
+    
+    ```bash
+    az ad sp create-for-rbac \
+      --name terraform \
+      --role Owner \
+      --scopes "/subscriptions/$ARM_SUBSCRIPTION_ID"
+    ```
+    
+    **Expected output:**
+    ```json
+    {
+      "appId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "displayName": "terraform",
+      "password": "xxxxx~xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "tenant": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    }
+    ```
+    
+    Export the credentials:
+    ```bash
+    export ARM_CLIENT_ID="<appId>"
+    export ARM_CLIENT_SECRET="<password>"
+    export ARM_TENANT_ID="<tenant>"
+    ```
+  </Step>
+  
+  <Step title="Grant Microsoft Graph permissions">
+    Add User.Read delegated permission:
+    
+    ```bash
+    # Add User.Read permission
+    az ad app permission add --id $ARM_CLIENT_ID \
+      --api 00000003-0000-0000-c000-000000000000 \
+      --api-permissions e1fe6dd8-ba31-4d61-89e7-88639da4683d=Scope
+    
+    # Grant the permission
+    az ad app permission grant --id $ARM_CLIENT_ID \
+      --api 00000003-0000-0000-c000-000000000000 \
+      --consent-type AllPrincipals --scope User.Read
+    
+    # Admin consent
+    az ad app permission admin-consent --id $ARM_CLIENT_ID
+    ```
+  </Step>
+  
+  <Step title="Assign Application Administrator role">
+    Grant the service principal Application Administrator directory role:
+    
+    ```bash
+    # Get role definition ID
+    ROLE_ID=$(az rest --method GET \
+      --url "https://graph.microsoft.com/v1.0/roleManagement/directory/roleDefinitions?\$filter=displayName eq 'Application Administrator'" \
+      --query 'value[0].id' -o tsv)
+    
+    echo "Role ID: $ROLE_ID"
+    
+    # Get service principal object ID
+    SP_OBJECT_ID=$(az ad sp list --display-name "terraform" --query "[0].id" -o tsv)
+    
+    echo "Service Principal Object ID: $SP_OBJECT_ID"
+    
+    # Assign the role
+    az rest --method POST \
+      --url "https://graph.microsoft.com/v1.0/roleManagement/directory/roleAssignments" \
+      --headers "Content-Type=application/json" \
+      --body "{\"principalId\": \"${SP_OBJECT_ID}\", \"roleDefinitionId\": \"${ROLE_ID}\", \"directoryScopeId\": \"/\"}"
+    ```
+  </Step>
+  
+  <Step title="Verify environment variables">
+    Confirm all required variables are set:
+    
+    ```bash
+    echo "ARM_SUBSCRIPTION_ID: $ARM_SUBSCRIPTION_ID"
+    echo "ARM_CLIENT_ID: $ARM_CLIENT_ID"
+    echo "ARM_CLIENT_SECRET: $ARM_CLIENT_SECRET"
+    echo "ARM_TENANT_ID: $ARM_TENANT_ID"
+    ```
+    
+    <Warning>
+      If any variables are empty, go back and re-run the relevant commands.
+    </Warning>
+  </Step>
+</Steps>
+
+### Install Rack
+
+```bash
+convox rack install azure <rack-name> [param=value]...
+```
+
+**Example:**
+```bash
+convox rack install azure production region=westus2 node_type=Standard_D2_v3
+```
+
+### Available Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `region` | `eastus` | Azure region |
+| `node_type` | `Standard_D3_v3` | VM size for Kubernetes nodes |
+| `cert_duration` | `2160h` | Certificate renewal period |
+| `syslog` | | Forward logs to syslog endpoint |
+
+### Troubleshooting
+
+<Accordion title="Insufficient privileges errors">
+  **Cause**: Application Administrator role not properly assigned.
+  
+  **Solution**: Verify role assignment:
+  ```bash
+  az rest --method GET \
+    --url "https://graph.microsoft.com/v1.0/roleManagement/directory/roleAssignments?\$filter=principalId eq '${SP_OBJECT_ID}'"
+  ```
+</Accordion>
+
+<Accordion title="Invalid resource access error">
+  **Cause**: Incorrect permission ID in step 3.
+  
+  **Solution**: Ensure you're using permission ID `e1fe6dd8-ba31-4d61-89e7-88639da4683d`.
+</Accordion>
+
+<Accordion title="Content-Type header missing">
+  **Cause**: REST API requires Content-Type header.
+  
+  **Solution**: Include `--headers "Content-Type=application/json"` in az rest commands.
+</Accordion>
+
+### Console Integration Alternative
+
+Instead of CLI installation, use the [Convox Console](https://console.convox.com) to create Azure integrations:
+
+1. Navigate to **Integrations** > **Install Azure Runtime**
+2. Provide the credentials from service principal creation:
+   - **Subscription ID**: From `$ARM_SUBSCRIPTION_ID`
+   - **Tenant ID**: From service principal `tenant` field
+   - **Client ID**: From service principal `appId` field
+   - **Client Secret**: From service principal `password` field
+3. Click **Install** and create your rack through the web interface
+
+---
+
+## Digital Ocean
+
+### Prerequisites
+
+<Steps>
+  <Step title="Install Terraform">
+    Install [Terraform](https://learn.hashicorp.com/terraform/getting-started/install.html).
+  </Step>
+  
+  <Step title="Install Convox CLI">
+    Follow the [CLI installation guide](/installation/cli).
+  </Step>
+</Steps>
+
+### Setup Digital Ocean Credentials
+
+<Steps>
+  <Step title="Create Personal Access Token">
+    Go to [Digital Ocean API Tokens](https://cloud.digitalocean.com/account/api/tokens) and generate a new Personal Access Token.
+    
+    ```bash
+    export DIGITALOCEAN_TOKEN=<your-token>
+    ```
+  </Step>
+  
+  <Step title="Create Spaces Access Key">
+    Go to [Digital Ocean Spaces Keys](https://cloud.digitalocean.com/account/api/tokens) and generate a new Spaces Access Key.
+    
+    ```bash
+    export DIGITALOCEAN_ACCESS_ID=<key>
+    export DIGITALOCEAN_SECRET_KEY=<secret>
+    ```
+  </Step>
+</Steps>
+
+### Install Rack
+
+```bash
+convox rack install do <rack-name> [param1=value1]...
+```
+
+**Example:**
+```bash
+convox rack install do production region=nyc3 node_type=s-4vcpu-8gb
+```
+
+### Available Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `region` | `nyc3` | [Digital Ocean region](https://slugs.do-api.dev/) |
+| `node_type` | `s-2vcpu-4gb` | [Node instance type](https://slugs.do-api.dev/) |
+| `registry_disk` | `50Gi` | Registry disk size |
+| `cert_duration` | `2160h` | Certificate renewal period |
+| `syslog` | | Forward logs to syslog endpoint |
+
+<Tip>
+  Digital Ocean offers a simple, cost-effective option for production racks. It's great for small to medium-sized applications.
+</Tip>
+
+---
+
+## CLI Installation
+
+All cloud providers follow a similar CLI installation pattern:
+
+<Steps>
+  <Step title="Install prerequisites">
+    - Provider CLI tools (AWS CLI, gcloud, az, etc.)
+    - Terraform
+    - Convox CLI
+  </Step>
+  
+  <Step title="Configure credentials">
+    Set up provider-specific environment variables with appropriate permissions.
+  </Step>
+  
+  <Step title="Run install command">
+    ```bash
+    convox rack install <provider> <rack-name> [parameters]
+    ```
+  </Step>
+  
+  <Step title="Wait for completion">
+    Installation typically takes 10-20 minutes. The CLI will display progress.
+  </Step>
+  
+  <Step title="Verify installation">
+    ```bash
+    convox racks
+    convox rack -r <rack-name>
+    ```
+  </Step>
+</Steps>
+
+## Post-Installation
+
+After installing your production rack:
+
+<Steps>
+  <Step title="Switch to the rack">
+    ```bash
+    convox switch <rack-name>
+    ```
+  </Step>
+  
+  <Step title="Deploy your first app">
+    Follow the [Getting Started guide](/reference/primitives/getting-started/introduction) to deploy an application.
+  </Step>
+  
+  <Step title="Configure monitoring">
+    Set up logging and monitoring integrations as needed.
+  </Step>
+  
+  <Step title="Review security settings">
+    Configure access controls, SSL certificates, and network policies.
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Deploy Applications" icon="rocket" href="/reference/primitives/getting-started/introduction">
+    Learn how to deploy your applications
+  </Card>
+  <Card title="Rack Management" icon="gear" href="/management/cli-rack-management">
+    Manage and update your racks
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/configuration/rack-parameters">
+    Configure rack parameters
+  </Card>
+  <Card title="Console" icon="browser" href="https://console.convox.com">
+    Manage racks in the web console
+  </Card>
+</CardGroup>

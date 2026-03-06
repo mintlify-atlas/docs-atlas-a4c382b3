@@ -1,0 +1,312 @@
+---
+title: Command Line Interface
+description: Install the Convox CLI on macOS, Linux, or Windows
+---
+
+The Convox CLI is a command-line tool for managing Convox racks, applications, and resources. Install it on your local machine to get started.
+
+## Installation
+
+Choose your operating system to see installation instructions:
+
+<Tabs>
+  <Tab title="macOS">
+    ### macOS Installation
+    
+    <Tabs>
+      <Tab title="Intel (x86_64)">
+        <Steps>
+          <Step title="Download the CLI">
+            Download the latest Convox CLI binary for macOS Intel:
+            
+            ```bash
+            curl -L https://github.com/convox/convox/releases/latest/download/convox-macos -o /tmp/convox
+            ```
+          </Step>
+          
+          <Step title="Install to system path">
+            Move the binary to your system path and make it executable:
+            
+            ```bash
+            sudo mv /tmp/convox /usr/local/bin/convox
+            sudo chmod 755 /usr/local/bin/convox
+            ```
+          </Step>
+          
+          <Step title="Verify installation">
+            Confirm the CLI is installed correctly:
+            
+            ```bash
+            convox --version
+            ```
+          </Step>
+        </Steps>
+      </Tab>
+      
+      <Tab title="Apple Silicon (ARM64)">
+        <Steps>
+          <Step title="Download the CLI">
+            Download the latest Convox CLI binary for macOS ARM64:
+            
+            ```bash
+            curl -L https://github.com/convox/convox/releases/latest/download/convox-macos-arm64 -o /tmp/convox
+            ```
+          </Step>
+          
+          <Step title="Install to system path">
+            Move the binary to your system path and make it executable:
+            
+            ```bash
+            sudo mv /tmp/convox /usr/local/bin/convox
+            sudo chmod 755 /usr/local/bin/convox
+            ```
+          </Step>
+          
+          <Step title="Verify installation">
+            Confirm the CLI is installed correctly:
+            
+            ```bash
+            convox --version
+            ```
+          </Step>
+        </Steps>
+      </Tab>
+    </Tabs>
+  </Tab>
+  
+  <Tab title="Linux">
+    ### Linux Installation
+    
+    <Tabs>
+      <Tab title="x86_64 / amd64">
+        <Steps>
+          <Step title="Download the CLI">
+            Download the latest Convox CLI binary for Linux x86_64:
+            
+            ```bash
+            curl -L https://github.com/convox/convox/releases/latest/download/convox-linux -o /tmp/convox
+            ```
+          </Step>
+          
+          <Step title="Install to system path">
+            Move the binary to your system path and make it executable:
+            
+            ```bash
+            sudo mv /tmp/convox /usr/local/bin/convox
+            sudo chmod 755 /usr/local/bin/convox
+            ```
+          </Step>
+          
+          <Step title="Verify installation">
+            Confirm the CLI is installed correctly:
+            
+            ```bash
+            convox --version
+            ```
+          </Step>
+        </Steps>
+      </Tab>
+      
+      <Tab title="ARM64">
+        <Steps>
+          <Step title="Download the CLI">
+            Download the latest Convox CLI binary for Linux ARM64:
+            
+            ```bash
+            curl -L https://github.com/convox/convox/releases/latest/download/convox-linux-arm64 -o /tmp/convox
+            ```
+          </Step>
+          
+          <Step title="Install to system path">
+            Move the binary to your system path and make it executable:
+            
+            ```bash
+            sudo mv /tmp/convox /usr/local/bin/convox
+            sudo chmod 755 /usr/local/bin/convox
+            ```
+          </Step>
+          
+          <Step title="Verify installation">
+            Confirm the CLI is installed correctly:
+            
+            ```bash
+            convox --version
+            ```
+          </Step>
+        </Steps>
+      </Tab>
+    </Tabs>
+  </Tab>
+  
+  <Tab title="Windows">
+    ### Windows Installation
+    
+    <Warning>
+      Windows support for Convox CLI is limited. We recommend using Windows Subsystem for Linux (WSL) and following the Linux installation instructions.
+    </Warning>
+    
+    <Steps>
+      <Step title="Enable WSL">
+        If not already enabled, install Windows Subsystem for Linux:
+        
+        ```powershell
+        wsl --install
+        ```
+        
+        Restart your computer when prompted.
+      </Step>
+      
+      <Step title="Install Linux distribution">
+        Install Ubuntu from the Microsoft Store or use the default distribution.
+      </Step>
+      
+      <Step title="Follow Linux instructions">
+        Open your WSL terminal and follow the Linux installation instructions above.
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
+
+## Verify Installation
+
+After installation, verify the CLI is working correctly:
+
+```bash
+convox --version
+```
+
+**Expected output:**
+```
+3.x.x
+```
+
+You can also view all available commands:
+
+```bash
+convox --help
+```
+
+## Authentication
+
+If you're using the Convox Web Console, you'll need to authenticate the CLI:
+
+<Steps>
+  <Step title="Log in to Convox">
+    Run the login command:
+    
+    ```bash
+    convox login
+    ```
+  </Step>
+  
+  <Step title="Enter your credentials">
+    Follow the prompts to authenticate with your Convox account.
+  </Step>
+  
+  <Step title="Verify authentication">
+    List your racks to confirm authentication:
+    
+    ```bash
+    convox racks
+    ```
+  </Step>
+</Steps>
+
+## Common Commands
+
+Here are some essential Convox CLI commands:
+
+<CodeGroup>
+```bash List racks
+convox racks
+```
+
+```bash Switch racks
+convox switch <rack-name>
+```
+
+```bash List apps
+convox apps
+```
+
+```bash Deploy an app
+convox deploy
+```
+
+```bash View logs
+convox logs --app <app-name>
+```
+
+```bash Run a command
+convox run web bash --app <app-name>
+```
+</CodeGroup>
+
+## Update the CLI
+
+To update to the latest version of the Convox CLI, simply repeat the installation process. The new binary will replace the old one.
+
+```bash
+# macOS Intel example
+curl -L https://github.com/convox/convox/releases/latest/download/convox-macos -o /tmp/convox
+sudo mv /tmp/convox /usr/local/bin/convox
+sudo chmod 755 /usr/local/bin/convox
+```
+
+<Tip>
+  Check the [Convox releases page](https://github.com/convox/convox/releases) to see what's new in each version.
+</Tip>
+
+## Troubleshooting
+
+### Permission denied
+
+If you get a "permission denied" error when running `convox`:
+
+```bash
+sudo chmod 755 /usr/local/bin/convox
+```
+
+### Command not found
+
+If you get "command not found":
+
+1. Ensure `/usr/local/bin` is in your PATH:
+   ```bash
+   echo $PATH
+   ```
+
+2. If not, add it to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.):
+   ```bash
+   export PATH="/usr/local/bin:$PATH"
+   ```
+
+3. Reload your shell configuration:
+   ```bash
+   source ~/.bashrc  # or ~/.zshrc
+   ```
+
+### macOS security warning
+
+On macOS, you may see a security warning about an unidentified developer:
+
+1. Go to **System Preferences** > **Security & Privacy**
+2. Click **Allow Anyway** next to the blocked message
+3. Run the `convox` command again
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Development Rack" icon="laptop-code" href="/installation/development-rack">
+    Install a local development rack
+  </Card>
+  <Card title="Production Rack" icon="cloud" href="/installation/production-rack">
+    Deploy to your cloud provider
+  </Card>
+  <Card title="CLI Reference" icon="book" href="/reference/cli">
+    View all CLI commands
+  </Card>
+  <Card title="Getting Started" icon="rocket" href="/reference/primitives/getting-started/introduction">
+    Learn Convox fundamentals
+  </Card>
+</CardGroup>

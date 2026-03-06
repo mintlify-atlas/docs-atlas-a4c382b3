@@ -1,0 +1,467 @@
+---
+title: rack
+description: Manage your Convox rack infrastructure
+---
+
+The `rack` command group provides tools for managing your Convox rack installation. A rack is the infrastructure layer that runs your applications, including compute resources, networking, and orchestration.
+
+## rack
+
+Display information about the current rack.
+
+### Usage
+
+```bash
+convox rack
+```
+
+### Flags
+
+<ParamField path="--rack" type="string" default="-r">
+  Rack name
+</ParamField>
+
+### Example Output
+
+```bash
+$ convox rack
+Name      production
+Provider  aws
+Region    us-east-1
+Router    router.0a1b2c3d4e5f.convox.cloud
+Status    running
+Version   3.12.0
+```
+
+## rack install
+
+Install a new Convox rack.
+
+### Usage
+
+```bash
+convox rack install <provider> <name> [option=value]...
+```
+
+For Console-managed racks:
+```bash
+convox rack install <provider> <orgname>/<rackname> region=<region> --runtime=<runtime-id> [option=value]...
+```
+
+### Arguments
+
+<ParamField path="provider" type="string" required>
+  Cloud provider: `aws`, `gcp`, `azure`, or `local`
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  Name for the rack (or `orgname/rackname` for Console)
+</ParamField>
+
+<ParamField path="option=value" type="string">
+  Provider-specific configuration options
+</ParamField>
+
+### Flags
+
+<ParamField path="--version" type="string" default="-v">
+  Specific rack version to install
+</ParamField>
+
+<ParamField path="--runtime" type="string" default="-r">
+  Runtime integration ID (for Console-managed racks)
+</ParamField>
+
+<ParamField path="--prepare" type="boolean">
+  Prepare installation without executing
+</ParamField>
+
+### Examples
+
+#### Local Development Rack
+
+```bash
+$ convox rack install local dev
+Installing local rack...
+Starting Kubernetes...
+Deploying Convox...
+OK
+```
+
+#### AWS Production Rack
+
+```bash
+$ convox rack install aws production region=us-east-1 node_type=t3.large
+Installing AWS rack...
+Creating VPC...
+Creating EKS cluster...
+Deploying Convox...
+OK
+```
+
+#### Console-Managed Rack
+
+```bash
+# First, get runtime ID
+$ convox rack runtimes my-org
+ID                                    TITLE
+20e58437-fab7-4124-aa5a-2e5978f1149e  Production AWS Account
+
+# Install with runtime
+$ convox rack install aws my-org/staging region=us-west-2 --runtime=20e58437-fab7-4124-aa5a-2e5978f1149e
+Convox Rack installation initiated. Check progress on the Console Racks page.
+```
+
+<Note>
+  For Console-managed racks, installation is asynchronous. Monitor progress in the Convox Console.
+</Note>
+
+## rack kubeconfig
+
+Generate a Kubernetes configuration file for direct cluster access.
+
+### Usage
+
+```bash
+convox rack kubeconfig
+```
+
+### Example Output
+
+```bash
+$ convox rack kubeconfig
+apiVersion: v1
+clusters:
+- cluster:
+    server: https://api.0a1b2c3d4e5f.convox.cloud/kubernetes/
+  name: kubernetes
+contexts:
+- context:
+    cluster: kubernetes
+    user: proxy
+  name: proxy@kubernetes
+current-context: proxy@kubernetes
+kind: Config
+preferences: {}
+users:
+- name: proxy
+  user:
+    username: convox
+    password: abcdefghijklmnopqrstuvwxyz
+```
+
+### Using the Kubeconfig
+
+```bash
+# Save to file
+$ convox rack kubeconfig > ~/.kube/convox-config
+
+# Use with kubectl
+$ export KUBECONFIG=~/.kube/convox-config
+$ kubectl get nodes
+```
+
+## rack logs
+
+Stream logs from the rack infrastructure.
+
+### Usage
+
+```bash
+convox rack logs
+```
+
+### Flags
+
+<ParamField path="--rack" type="string" default="-r">
+  Rack name
+</ParamField>
+
+<ParamField path="--filter" type="string">
+  Filter logs by string
+</ParamField>
+
+<ParamField path="--since" type="string">
+  Show logs since timeframe (e.g., "10m", "1h")
+</ParamField>
+
+<ParamField path="--no-follow" type="boolean">
+  Print logs without streaming
+</ParamField>
+
+### Example
+
+```bash
+$ convox rack logs
+2020-02-10T13:37:22Z service/web/a55eb25e ns=provider.aws at=SystemGet state=success
+2020-02-10T13:38:04Z service/web/a55eb25e ns=api at=SystemGet method="GET" path="/system"
+```
+
+## rack mv
+
+Transfer rack ownership between individual user and organization.
+
+### Usage
+
+```bash
+convox rack mv <from> <to>
+```
+
+### Arguments
+
+<ParamField path="from" type="string" required>
+  Current rack identifier
+</ParamField>
+
+<ParamField path="to" type="string" required>
+  Target rack identifier
+</ParamField>
+
+### Examples
+
+```bash
+# Move to organization
+$ convox rack mv dev acme/dev
+moving rack dev to acme/dev... OK
+
+# Move from organization
+$ convox rack mv acme/dev dev
+moving rack acme/dev to dev... OK
+```
+
+<Note>
+  The rack name must remain the same. Only the ownership changes.
+</Note>
+
+## rack ps
+
+List processes running on the rack infrastructure.
+
+### Usage
+
+```bash
+convox rack ps [--all]
+```
+
+### Flags
+
+<ParamField path="--rack" type="string" default="-r">
+  Rack name
+</ParamField>
+
+<ParamField path="--all" type="boolean">
+  Include system processes
+</ParamField>
+
+### Examples
+
+```bash
+$ convox rack ps
+ID                       APP     SERVICE  STATUS   RELEASE
+api-9749b7ccb-29zh5      rack    api      running  3.12.0
+router-846b84d544-ndz76  rack    router   running  3.12.0
+
+$ convox rack ps --all
+ID                       APP     SERVICE        STATUS   RELEASE
+api-9749b7ccb-29zh5      rack    api            running  3.12.0
+router-846b84d544-ndz76  rack    router         running  3.12.0
+fluentd-p56dk            system  fluentd        running  3.12.0
+elasticsearch-0          system  elasticsearch  running  3.12.0
+```
+
+## rack update
+
+Update the rack to a new version.
+
+### Usage
+
+```bash
+convox rack update [version]
+```
+
+### Arguments
+
+<ParamField path="version" type="string">
+  Target version (omit for latest)
+</ParamField>
+
+### Flags
+
+<ParamField path="--rack" type="string" default="-r">
+  Rack name
+</ParamField>
+
+<ParamField path="--force" type="boolean">
+  Force update even if validation fails
+</ParamField>
+
+### Example
+
+```bash
+$ convox rack update
+Upgrading modules...
+Downloading github.com/convox/convox?ref=3.12.0...
+Apply complete! Resources: 1 added, 4 changed, 1 destroyed.
+OK
+
+$ convox rack update 3.11.0
+Upgrading to version 3.11.0...
+OK
+```
+
+<Note>
+  Rack updates are applied with zero downtime. Your applications continue running during the update.
+</Note>
+
+## rack uninstall
+
+Uninstall and remove a rack.
+
+### Usage
+
+```bash
+convox rack uninstall <name>
+```
+
+### Arguments
+
+<ParamField path="name" type="string" required>
+  Rack name to uninstall
+</ParamField>
+
+### Example
+
+```bash
+$ convox rack uninstall my-rack
+Uninstalling rack my-rack...
+Deleting resources...
+Destroy complete! Resources: 35 destroyed.
+```
+
+<Note>
+  This is a destructive operation that will delete all apps, data, and infrastructure. Make sure to backup before uninstalling.
+</Note>
+
+## rack params
+
+Display rack parameters.
+
+### Usage
+
+```bash
+convox rack params
+```
+
+### Example Output
+
+```bash
+$ convox rack params
+Autoscale              Yes
+InstanceType           t3.medium
+InstanceCount          3
+BuildInstance          t3.large
+NodeDisk               100
+Private                No
+Region                 us-east-1
+```
+
+## rack params set
+
+Set rack parameters.
+
+### Usage
+
+```bash
+convox rack params set <Key=Value> [Key=Value]...
+```
+
+### Common Parameters
+
+<ParamField path="InstanceType" type="string">
+  EC2 instance type for rack nodes
+</ParamField>
+
+<ParamField path="InstanceCount" type="integer">
+  Number of rack instances
+</ParamField>
+
+<ParamField path="NodeDisk" type="integer">
+  Disk size in GB for rack nodes
+</ParamField>
+
+<ParamField path="BuildInstance" type="string">
+  Instance type for build operations
+</ParamField>
+
+### Example
+
+```bash
+$ convox rack params set InstanceType=t3.large InstanceCount=5
+Updating parameters... OK
+```
+
+## rack access
+
+Generate temporary rack access credentials.
+
+### Usage
+
+```bash
+convox rack access --role <role> --duration-in-hours <hours>
+```
+
+### Flags
+
+<ParamField path="--role" type="string" required>
+  Access role: `read` or `write`
+</ParamField>
+
+<ParamField path="--duration-in-hours" type="integer" required>
+  Credential TTL in hours
+</ParamField>
+
+### Example
+
+```bash
+$ convox rack access --role read --duration-in-hours 1
+RACK_URL=https://jwt:token@api.rack.convox.cloud
+
+$ export RACK_URL=https://jwt:token@api.rack.convox.cloud
+$ convox apps
+```
+
+<Note>
+  Requires rack version >= 3.14.1
+</Note>
+
+## rack access key rotate
+
+Rotate the rack access key.
+
+### Usage
+
+```bash
+convox rack access key rotate
+```
+
+### Example
+
+```bash
+$ convox rack access key rotate
+OK
+```
+
+<Note>
+  This invalidates all previously generated credentials from `convox rack access`.
+</Note>
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="Apps" icon="box" href="/cli/apps">
+    Manage applications on the rack
+  </Card>
+  <Card title="Racks" icon="layer-group" href="/cli/apps">
+    List and switch between racks
+  </Card>
+</CardGroup>

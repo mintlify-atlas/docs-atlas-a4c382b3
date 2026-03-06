@@ -1,0 +1,694 @@
+---
+title: "Microsoft Azure"
+description: "Install and configure Convox on Microsoft Azure with AKS"
+---
+
+# Microsoft Azure
+
+Deploy Convox on Microsoft Azure using Azure Kubernetes Service (AKS) for enterprise-grade Kubernetes with deep Azure integration.
+
+<Note>
+The easiest way to install a Rack is with the [Convox Web Console](https://console.convox.com). These instructions are for command-line installation.
+</Note>
+
+## Prerequisites
+
+Before installing Convox on Azure, ensure you have the following tools installed:
+
+<Steps>
+  <Step title="Install Azure CLI">
+    Download and install the `az` CLI to interact with Azure services.
+    
+    ```bash
+    # macOS
+    brew install azure-cli
+    
+    # Linux
+    curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+    
+    # Windows (PowerShell)
+    Invoke-WebRequest -Uri https://aka.ms/installazurecliwindows -OutFile .\AzureCLI.msi
+    Start-Process msiexec.exe -Wait -ArgumentList '/I AzureCLI.msi /quiet'
+    ```
+    
+    [Azure CLI Installation Guide](https://docs.microsoft.com/cli/azure/install-azure-cli)
+  </Step>
+
+  <Step title="Install Terraform (Optional)">
+    While not strictly required, Terraform provides infrastructure as code capabilities.
+    
+    ```bash
+    # macOS
+    brew tap hashicorp/tap
+    brew install hashicorp/tap/terraform
+    
+    # Linux
+    wget https://releases.hashicorp.com/terraform/1.6.0/terraform_1.6.0_linux_amd64.zip
+    unzip terraform_1.6.0_linux_amd64.zip
+    sudo mv terraform /usr/local/bin/
+    ```
+    
+    [Terraform Installation Guide](https://developer.hashicorp.com/terraform/tutorials)
+  </Step>
+
+  <Step title="Install Convox CLI">
+    Install the Convox CLI to manage your racks and applications.
+    
+    ```bash
+    # macOS
+    curl -L https://github.com/convox/convox/releases/latest/download/convox-macos -o /tmp/convox
+    
+    # Linux
+    curl -L https://github.com/convox/convox/releases/latest/download/convox-linux -o /tmp/convox
+    
+    sudo mv /tmp/convox /usr/local/bin/convox
+    sudo chmod 755 /usr/local/bin/convox
+    ```
+    
+    [Convox CLI Documentation](/installation/cli)
+  </Step>
+</Steps>
+
+## Azure Authentication Setup
+
+Convox requires Azure credentials configured through a service principal with appropriate permissions.
+
+### Required Environment Variables
+
+<ParamField path="ARM_SUBSCRIPTION_ID" type="string" required>
+  Your Azure subscription ID
+</ParamField>
+
+<ParamField path="ARM_TENANT_ID" type="string" required>
+  Your Azure Active Directory tenant ID
+</ParamField>
+
+<ParamField path="ARM_CLIENT_ID" type="string" required>
+  Application (client) ID of the service principal
+</ParamField>
+
+<ParamField path="ARM_CLIENT_SECRET" type="string" required>
+  Client secret for the service principal
+</ParamField>
+
+### Step-by-Step Azure Configuration
+
+<Steps>
+  <Step title="Sign in to Azure">
+    ```bash
+    az login
+    ```
+    
+    A web browser will open for authentication. Select your subscription.
+    
+    **Expected output:**
+    ```
+    [
+      {
+        "cloudName": "AzureCloud",
+        "id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+        "isDefault": true,
+        "name": "Your Subscription",
+        "state": "Enabled",
+        "tenantId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+      }
+    ]
+    ```
+  </Step>
+  
+  <Step title="Select Your Subscription">
+    ```bash
+    # List available subscriptions
+    az account list --output table
+    
+    # Set your subscription
+    az account set --subscription <SUBSCRIPTION_ID>
+    
+    # Export the subscription ID
+    export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+    
+    # Verify
+    echo "Subscription ID: $ARM_SUBSCRIPTION_ID"
+    ```
+  </Step>
+  
+  <Step title="Create Service Principal">
+    Create a service principal with Owner role:
+    
+    ```bash
+    az ad sp create-for-rbac \
+      --name terraform \
+      --role Owner \
+      --scopes "/subscriptions/$ARM_SUBSCRIPTION_ID"
+    ```
+    
+    **Expected output:**
+    ```json
+    {
+      "appId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "displayName": "terraform",
+      "password": "xxxxx~xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "tenant": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    }
+    ```
+    
+    **Save these values:**
+    - `appId` → `ARM_CLIENT_ID`
+    - `password` → `ARM_CLIENT_SECRET`
+    - `tenant` → `ARM_TENANT_ID`
+  </Step>
+  
+  <Step title="Export Environment Variables">
+    ```bash
+    # Export from service principal output
+    export ARM_CLIENT_ID="<appId-from-output>"
+    export ARM_CLIENT_SECRET="<password-from-output>"
+    export ARM_TENANT_ID="<tenant-from-output>"
+    
+    # Verify all variables are set
+    echo "Subscription ID: $ARM_SUBSCRIPTION_ID"
+    echo "Client ID: $ARM_CLIENT_ID"
+    echo "Client Secret: $ARM_CLIENT_SECRET"
+    echo "Tenant ID: $ARM_TENANT_ID"
+    ```
+    
+    <Warning>
+    Store these credentials securely. Never commit them to version control.
+    </Warning>
+  </Step>
+  
+  <Step title="Grant Microsoft Graph Permissions">
+    The service principal needs Microsoft Graph API permissions:
+    
+    ```bash
+    # Add User.Read delegated permission
+    az ad app permission add --id $ARM_CLIENT_ID \
+      --api 00000003-0000-0000-c000-000000000000 \
+      --api-permissions e1fe6dd8-ba31-4d61-89e7-88639da4683d=Scope
+    
+    # Grant the permission
+    az ad app permission grant --id $ARM_CLIENT_ID \
+      --api 00000003-0000-0000-c000-000000000000 \
+      --consent-type AllPrincipals --scope User.Read
+    
+    # Provide admin consent
+    az ad app permission admin-consent --id $ARM_CLIENT_ID
+    ```
+  </Step>
+  
+  <Step title="Assign Application Administrator Role">
+    The service principal needs directory-level permissions:
+    
+    ```bash
+    # Get the role definition ID
+    ROLE_ID=$(az rest --method GET \
+      --url "https://graph.microsoft.com/v1.0/roleManagement/directory/roleDefinitions?\$filter=displayName eq 'Application Administrator'" \
+      --query 'value[0].id' -o tsv)
+    
+    # Get the service principal object ID
+    SP_OBJECT_ID=$(az ad sp list --display-name "terraform" --query "[0].id" -o tsv)
+    
+    # Assign the role
+    az rest --method POST \
+      --url "https://graph.microsoft.com/v1.0/roleManagement/directory/roleAssignments" \
+      --headers "Content-Type=application/json" \
+      --body "{\"principalId\": \"${SP_OBJECT_ID}\", \"roleDefinitionId\": \"${ROLE_ID}\", \"directoryScopeId\": \"/\"}"
+    ```
+  </Step>
+</Steps>
+
+## Installation
+
+Install a Convox Rack on Azure using the CLI:
+
+```bash
+convox rack install azure <rack-name> [param1=value1] [param2=value2]...
+```
+
+### Basic Installation
+
+```bash
+# Install with default settings
+convox rack install azure production
+
+# Install in specific region
+convox rack install azure production region=westus2
+
+# Install with custom node type
+convox rack install azure production region=eastus node_type=Standard_D2_v3
+```
+
+### Installation Examples
+
+<CodeGroup>
+```bash Development
+# Cost-optimized development rack
+convox rack install azure dev \
+  region=eastus \
+  node_type=Standard_B2s
+```
+
+```bash Production
+# Production rack with standard VMs
+convox rack install azure production \
+  region=eastus \
+  node_type=Standard_D4_v3
+```
+
+```bash High-Memory
+# Memory-optimized for data processing
+convox rack install azure compute \
+  region=westus2 \
+  node_type=Standard_E4_v3
+```
+</CodeGroup>
+
+## Configuration Parameters
+
+Convox on Azure supports the following configuration parameters:
+
+### Region Configuration
+
+<ParamField path="region" type="string" default="eastus">
+  Azure region where the rack will be deployed
+  
+  **Popular Regions:**
+  
+  **United States:**
+  - `eastus` - East US (Virginia) - default
+  - `eastus2` - East US 2 (Virginia)
+  - `westus2` - West US 2 (Washington)
+  - `westus3` - West US 3 (Phoenix)
+  - `centralus` - Central US (Iowa)
+  
+  **Europe:**
+  - `westeurope` - West Europe (Netherlands)
+  - `northeurope` - North Europe (Ireland)
+  - `uksouth` - UK South (London)
+  - `germanywestcentral` - Germany West Central (Frankfurt)
+  
+  **Asia Pacific:**
+  - `eastasia` - East Asia (Hong Kong)
+  - `southeastasia` - Southeast Asia (Singapore)
+  - `japaneast` - Japan East (Tokyo)
+  - `australiaeast` - Australia East (Sydney)
+  
+  ```bash
+  convox rack install azure mystack region=westus2
+  ```
+  
+  [View all Azure regions](https://azure.microsoft.com/en-us/explore/global-infrastructure/geographies/)
+</ParamField>
+
+### Node Configuration
+
+<ParamField path="node_type" type="string" default="Standard_D3_v3">
+  Azure VM size for AKS nodes
+  
+  **Common VM Sizes:**
+  
+  **General Purpose (D-series v3):**
+  - `Standard_D2_v3` - 2 vCPU, 8 GB RAM
+  - `Standard_D3_v3` - 4 vCPU, 16 GB RAM (default)
+  - `Standard_D4_v3` - 4 vCPU, 16 GB RAM
+  - `Standard_D8_v3` - 8 vCPU, 32 GB RAM
+  
+  **Burstable (B-series):**
+  - `Standard_B2s` - 2 vCPU, 4 GB RAM (cost-effective)
+  - `Standard_B2ms` - 2 vCPU, 8 GB RAM
+  - `Standard_B4ms` - 4 vCPU, 16 GB RAM
+  
+  **Memory Optimized (E-series v3):**
+  - `Standard_E2_v3` - 2 vCPU, 16 GB RAM
+  - `Standard_E4_v3` - 4 vCPU, 32 GB RAM
+  - `Standard_E8_v3` - 8 vCPU, 64 GB RAM
+  
+  **Compute Optimized (F-series v2):**
+  - `Standard_F2s_v2` - 2 vCPU, 4 GB RAM
+  - `Standard_F4s_v2` - 4 vCPU, 8 GB RAM
+  - `Standard_F8s_v2` - 8 vCPU, 16 GB RAM
+  
+  ```bash
+  convox rack install azure mystack node_type=Standard_D4_v3
+  ```
+  
+  [View all Azure VM sizes](https://docs.microsoft.com/en-us/azure/virtual-machines/sizes)
+</ParamField>
+
+### SSL/TLS Configuration
+
+<ParamField path="cert_duration" type="string" default="2160h">
+  Certificate renewal period (90 days by default)
+  
+  Convox automatically manages TLS certificates using Let's Encrypt.
+  
+  **Duration Format:**
+  - `720h` - 30 days
+  - `2160h` - 90 days (recommended)
+  - `4320h` - 180 days
+  
+  ```bash
+  convox rack install azure mystack cert_duration=720h
+  ```
+</ParamField>
+
+### Logging Configuration
+
+<ParamField path="syslog" type="string">
+  Forward logs to an external syslog endpoint
+  
+  **Supported Protocols:**
+  - `tcp+tls://hostname:port` - TLS-encrypted TCP (recommended)
+  - `tcp://hostname:port` - Unencrypted TCP
+  - `udp://hostname:port` - UDP
+  
+  ```bash
+  convox rack install azure mystack syslog=tcp+tls://logs.example.com:514
+  ```
+</ParamField>
+
+## Infrastructure Components
+
+When you install Convox on Azure, Terraform provisions:
+
+### Networking
+- **Virtual Network (VNet)** with address space
+- **Subnets** for AKS nodes and pods
+- **Network Security Groups** for access control
+- **NAT Gateway** for outbound connectivity
+- **Public IP addresses** for load balancers
+
+### Compute
+- **AKS Cluster** (Kubernetes control plane)
+- **Virtual Machine Scale Sets** for node pools
+- **Managed Disks** for node storage
+
+### Storage
+- **Storage Account** for build artifacts
+- **Container Registry** (ACR) for Docker images
+- **Azure Disks** for persistent volumes
+
+### Load Balancing
+- **Azure Load Balancer** for ingress traffic
+- **Application Gateway** (optional)
+
+### Identity & Access
+- **Managed Identity** for cluster
+- **Service Principal** for Terraform
+- **RBAC Roles** for permissions
+
+### Monitoring & Logging
+- **Azure Monitor** for metrics
+- **Log Analytics Workspace** for logs
+- **Container Insights** for AKS monitoring
+
+## Service Principal Permissions
+
+The service principal requires:
+
+**Azure RBAC:**
+- `Owner` role on the subscription (for installation)
+
+Alternatively, combine these roles:
+- `Contributor` - Resource management
+- `User Access Administrator` - Role assignments
+
+**Azure AD Roles:**
+- `Application Administrator` - Create/manage applications
+
+## Cost Optimization
+
+<CardGroup cols={2}>
+  <Card title="B-Series VMs" icon="dollar-sign">
+    ```bash
+    convox rack install azure dev \
+      node_type=Standard_B2s
+    ```
+    
+    Burstable VMs for variable workloads at lower cost
+  </Card>
+  
+  <Card title="Reserved Instances" icon="calendar">
+    Purchase Azure Reserved VM Instances for 1-3 years to save up to 72%
+    
+    Configure in Azure Portal after installation
+  </Card>
+  
+  <Card title="Spot Instances" icon="percentage">
+    Use Azure Spot VMs for up to 90% savings on interruptible workloads
+    
+    (Configure through AKS node pools in Azure Portal)
+  </Card>
+  
+  <Card title="Right-Sizing" icon="gauge-high">
+    Start with smaller VM sizes:
+    ```bash
+    convox rack install azure dev \
+      node_type=Standard_D2_v3
+    ```
+    
+    Scale up as needed
+  </Card>
+</CardGroup>
+
+## Production Best Practices
+
+<Steps>
+  <Step title="Choose Appropriate VM Sizes">
+    ```bash
+    convox rack install azure production \
+      node_type=Standard_D4_v3
+    ```
+    
+    Select VM sizes based on workload:
+    - General apps: `Standard_D4_v3` or `Standard_D8_v3`
+    - Memory-intensive: `Standard_E4_v3` or `Standard_E8_v3`
+    - CPU-intensive: `Standard_F4s_v2` or `Standard_F8s_v2`
+  </Step>
+  
+  <Step title="Enable Logging">
+    ```bash
+    convox rack install azure production \
+      syslog=tcp+tls://logs.example.com:514
+    ```
+    
+    Forward logs to external services for retention and analysis.
+  </Step>
+  
+  <Step title="Select Appropriate Region">
+    ```bash
+    convox rack install azure production \
+      region=eastus
+    ```
+    
+    Choose a region based on:
+    - Proximity to users (latency)
+    - Compliance requirements
+    - Azure service availability
+    - Pricing (varies by region)
+  </Step>
+  
+  <Step title="Configure Availability Zones">
+    For mission-critical workloads, configure AKS to use availability zones through Azure Portal after installation.
+  </Step>
+  
+  <Step title="Enable Azure Monitor">
+    Configure Container Insights in Azure Portal for comprehensive monitoring:
+    1. Navigate to your AKS cluster
+    2. Select "Insights" under Monitoring
+    3. Enable Container Insights
+  </Step>
+</Steps>
+
+## Updating Rack Parameters
+
+After installation, you can update rack parameters:
+
+```bash
+# View current parameters
+convox rack params -r production
+
+# Update a parameter
+convox rack params set node_type=Standard_D4_v3 -r production
+
+# Update multiple parameters
+convox rack params set node_type=Standard_D4_v3 region=westus2 -r production
+```
+
+<Warning>
+Some parameter changes may require rack recreation. Test in a non-production environment first.
+</Warning>
+
+## Troubleshooting
+
+### Installation Issues
+
+<Accordion title="Insufficient permissions">
+  **Error:** `Authorization failed` or `permission denied` errors
+  
+  **Solution:**
+  
+  1. Verify service principal has Owner role:
+  ```bash
+  az role assignment list --assignee $ARM_CLIENT_ID --output table
+  ```
+  
+  2. Verify Application Administrator directory role:
+  ```bash
+  SP_OBJECT_ID=$(az ad sp list --display-name "terraform" --query "[0].id" -o tsv)
+  az rest --method GET \
+    --url "https://graph.microsoft.com/v1.0/roleManagement/directory/roleAssignments?\$filter=principalId eq '${SP_OBJECT_ID}'"
+  ```
+</Accordion>
+
+<Accordion title="Required API permissions missing">
+  **Error:** `The Required Resource Access specified in the request is invalid`
+  
+  **Solution:**
+  Re-run the Microsoft Graph permission commands with the correct permission ID:
+  ```bash
+  az ad app permission add --id $ARM_CLIENT_ID \
+    --api 00000003-0000-0000-c000-000000000000 \
+    --api-permissions e1fe6dd8-ba31-4d61-89e7-88639da4683d=Scope
+  ```
+</Accordion>
+
+<Accordion title="Content-Type header error">
+  **Error:** `Write requests must contain the Content-Type header declaration`
+  
+  **Solution:**
+  Ensure you include the header in REST calls:
+  ```bash
+  az rest --method POST \
+    --url "..." \
+    --headers "Content-Type=application/json" \
+    --body "{...}"
+  ```
+</Accordion>
+
+<Accordion title="Environment variables not persisting">
+  **Issue:** Variables lost after closing terminal
+  
+  **Solution:**
+  Add to your shell profile:
+  ```bash
+  # Add to ~/.bashrc or ~/.zshrc
+  export ARM_SUBSCRIPTION_ID="your-subscription-id"
+  export ARM_CLIENT_ID="your-client-id"
+  export ARM_CLIENT_SECRET="your-client-secret"
+  export ARM_TENANT_ID="your-tenant-id"
+  ```
+</Accordion>
+
+<Accordion title="Quota exceeded">
+  **Error:** `Quota exceeded` for specific VM types or regions
+  
+  **Solution:**
+  1. Check quotas in [Azure Portal - Quotas](https://portal.azure.com/#blade/Microsoft_Azure_Capacity/QuotaMenuBlade)
+  2. Request quota increase
+  3. Or choose different VM size/region
+</Accordion>
+
+### Runtime Issues
+
+<Accordion title="Node pool scaling issues">
+  **Issue:** Nodes not scaling as expected
+  
+  **Solution:**
+  - Verify subscription quotas for VM cores
+  - Check AKS cluster autoscaler settings in Azure Portal
+  - Review AKS diagnostics and logs
+</Accordion>
+
+<Accordion title="Load balancer not responding">
+  **Issue:** Cannot access applications
+  
+  **Solution:**
+  - Check Network Security Group rules
+  - Verify Load Balancer backend pool health
+  - Check application logs:
+    ```bash
+    convox logs -a myapp
+    ```
+</Accordion>
+
+## Using Convox Console Integration
+
+Alternatively, use the [Convox Console](https://console.convox.com) for a web-based installation:
+
+<Steps>
+  <Step title="Navigate to Integrations">
+    1. Go to [console.convox.com](https://console.convox.com)
+    2. Navigate to **Integrations**
+    3. Select **Install Azure Runtime**
+  </Step>
+  
+  <Step title="Enter Credentials">
+    Provide the following from your service principal setup:
+    
+    - **Subscription ID**: `$ARM_SUBSCRIPTION_ID`
+    - **Tenant ID**: `$ARM_TENANT_ID`
+    - **Client ID**: `$ARM_CLIENT_ID` (appId)
+    - **Client Secret**: `$ARM_CLIENT_SECRET` (password)
+  </Step>
+  
+  <Step title="Create Rack">
+    Follow the web UI to create your rack with desired configuration.
+  </Step>
+</Steps>
+
+## Azure Regions
+
+Choose a region based on your requirements:
+
+### Americas
+- **East US** (Virginia) - `eastus`
+- **East US 2** (Virginia) - `eastus2`
+- **West US 2** (Washington) - `westus2`
+- **West US 3** (Phoenix) - `westus3`
+- **Central US** (Iowa) - `centralus`
+- **Canada Central** (Toronto) - `canadacentral`
+- **Brazil South** (São Paulo) - `brazilsouth`
+
+### Europe
+- **North Europe** (Ireland) - `northeurope`
+- **West Europe** (Netherlands) - `westeurope`
+- **UK South** (London) - `uksouth`
+- **France Central** (Paris) - `francecentral`
+- **Germany West Central** (Frankfurt) - `germanywestcentral`
+
+### Asia Pacific
+- **Southeast Asia** (Singapore) - `southeastasia`
+- **East Asia** (Hong Kong) - `eastasia`
+- **Japan East** (Tokyo) - `japaneast`
+- **Australia East** (Sydney) - `australiaeast`
+- **Central India** (Pune) - `centralindia`
+
+[View complete list of regions](https://azure.microsoft.com/en-us/explore/global-infrastructure/geographies/)
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Deploy an Application" icon="rocket" href="/deployment/deploying-changes">
+    Learn how to deploy your first application to your new rack
+  </Card>
+  
+  <Card title="Configure Resources" icon="database" href="/reference/primitives/app/resource">
+    Set up databases, Redis, and other resources
+  </Card>
+  
+  <Card title="Custom Domains" icon="globe" href="/deployment/custom-domains">
+    Configure custom domains and SSL certificates
+  </Card>
+  
+  <Card title="Rack Management" icon="gears" href="/management/cli-rack-management">
+    Learn how to manage and update your rack
+  </Card>
+</CardGroup>
+
+## Additional Resources
+
+- [Azure Rack Parameters](/configuration/rack-parameters/azure) - Complete parameter reference
+- [AKS Best Practices](https://docs.microsoft.com/en-us/azure/aks/best-practices) - Microsoft's official guide
+- [Convox Troubleshooting](/help/troubleshooting) - Common issues and solutions
+- [Community Forum](https://community.convox.com) - Get help from the community

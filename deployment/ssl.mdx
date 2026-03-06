@@ -1,0 +1,609 @@
+---
+title: "SSL Certificates"
+description: "Automatic SSL certificate management with Let's Encrypt and advanced configuration options"
+---
+
+Convox automatically generates valid SSL certificates for your services using Let's Encrypt. By default, certificates are created and renewed automatically with zero configuration required.
+
+## Automatic SSL Certificates
+
+When you specify a custom `domain` attribute for your service, Convox automatically handles SSL certificate generation and renewal.
+
+### Basic Setup
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    domain: myapp.example.org
+```
+
+Convox will:
+
+<Steps>
+  <Step title="Request certificate">
+    Automatically request an SSL certificate from Let's Encrypt for `myapp.example.org`.
+  </Step>
+  
+  <Step title="Validate domain">
+    Complete domain validation using HTTP-01 challenge.
+  </Step>
+  
+  <Step title="Install certificate">
+    Install the certificate on your load balancer.
+  </Step>
+  
+  <Step title="Auto-renew">
+    Automatically renew the certificate before expiration.
+  </Step>
+</Steps>
+
+<Note>
+SSL certificates are valid for 90 days and are automatically renewed by Convox 30 days before expiration.
+</Note>
+
+## Validation Methods
+
+Convox supports two Let's Encrypt validation methods:
+
+<CardGroup cols={2}>
+  <Card title="HTTP-01 Challenge" icon="globe">
+    **Default method**
+    
+    Validates domain ownership by serving a challenge file over HTTP.
+    
+    **Requirements**:
+    - DNS must point to Convox
+    - Port 80 must be accessible
+    - No wildcard support
+  </Card>
+  
+  <Card title="DNS-01 Challenge" icon="server">
+    **Advanced method**
+    
+    Validates domain ownership via DNS TXT records.
+    
+    **Benefits**:
+    - Supports wildcard certificates
+    - Works without HTTP access
+    - More secure for internal apps
+  </Card>
+</CardGroup>
+
+## Pre-generating Certificates
+
+To minimize delays during your first deployment, pre-generate SSL certificates before deploying.
+
+### Generate Single Domain Certificate
+
+```bash
+$ convox certs generate "myapp.example.org" --issuer letsencrypt
+Generating certificate... OK, cert-abc123def456789
+```
+
+### Generate Multi-Domain Certificate
+
+Include multiple domains in one certificate:
+
+```bash
+$ convox certs generate "myapp.example.org" "www.myapp.example.org" --issuer letsencrypt
+Generating certificate... OK, cert-abc123def456789
+```
+
+### Generate Wildcard Certificate
+
+<Warning>
+Wildcard certificates require DNS-01 validation. See the DNS-01 Challenge section below.
+</Warning>
+
+```bash
+$ convox certs generate "*.example.org" --issuer letsencrypt
+Generating certificate... OK, cert-xyz789abc123
+```
+
+## Certificate Management
+
+Manage your SSL certificates using the Convox CLI.
+
+### List Certificates
+
+View all generated certificates:
+
+```bash
+$ convox certs --generated
+ID                          DOMAIN                   EXPIRES
+cert-abc123def456           *.example.com            2025-06-15 10:30:00
+cert-xyz789ghi012           myapp.example.org        2025-05-20 14:45:00
+cert-mno345pqr678           api.example.org          2025-07-01 08:15:00
+```
+
+### View Certificate Details
+
+Get detailed information about a specific certificate:
+
+```bash
+$ convox certs info cert-abc123def456
+ID        cert-abc123def456
+Domain    *.example.com, example.com
+Expires   2025-06-15 10:30:00 UTC
+Issuer    Let's Encrypt
+```
+
+### Delete Certificate
+
+Remove a certificate that's no longer needed:
+
+```bash
+$ convox certs delete cert-abc123def456
+Deleting certificate cert-abc123def456... OK
+```
+
+<Warning>
+Deleting a certificate in use will cause SSL errors for your application. Ensure the certificate is no longer referenced before deleting.
+</Warning>
+
+## Wildcard Certificates
+
+Wildcard certificates secure an entire domain and all its subdomains using a single certificate.
+
+### Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Multi-Tenant Apps" icon="users">
+    Secure customer-specific subdomains like `customer1.app.com`, `customer2.app.com`.
+  </Card>
+  
+  <Card title="Microservices" icon="diagram-project">
+    Cover multiple services: `api.app.com`, `admin.app.com`, `cdn.app.com`.
+  </Card>
+  
+  <Card title="Feature Branches" icon="code-branch">
+    Support dynamic preview URLs like `feature-123.preview.app.com`.
+  </Card>
+  
+  <Card title="Regional Deployments" icon="earth-americas">
+    Secure region-specific domains: `us-east.app.com`, `eu-west.app.com`.
+  </Card>
+</CardGroup>
+
+### Generating Wildcard Certificates
+
+<Warning>
+Wildcard certificates require DNS-01 challenge configuration. You must set up DNS-01 before generating wildcard certs.
+</Warning>
+
+```bash
+$ convox certs generate "*.mydomain.com" --issuer letsencrypt
+Generating certificate... OK, cert-wildcard123456
+```
+
+### Using Wildcard Certificates
+
+Reference the wildcard certificate in your `convox.yml`:
+
+```yaml
+services:
+  api:
+    build: .
+    port: 8080
+    domain: api.mydomain.com
+    certificate:
+      id: cert-wildcard123456
+  
+  admin:
+    build: .
+    port: 3000
+    domain: admin.mydomain.com
+    certificate:
+      id: cert-wildcard123456
+```
+
+Both services use the same wildcard certificate, simplifying certificate management.
+
+### Reusing Certificates Across Apps
+
+A single wildcard certificate can be shared across multiple applications:
+
+```yaml
+# App 1: myapp-api
+services:
+  api:
+    build: .
+    domain: api.mydomain.com
+    certificate:
+      id: cert-wildcard123456
+
+# App 2: myapp-web
+services:
+  web:
+    build: .
+    domain: www.mydomain.com
+    certificate:
+      id: cert-wildcard123456
+```
+
+<Tip>
+Reusing wildcard certificates reduces certificate management overhead and renewal complexity.
+</Tip>
+
+## DNS-01 Challenge Configuration
+
+The DNS-01 challenge validates domain ownership via DNS TXT records, enabling wildcard certificates and providing enhanced security.
+
+### Prerequisites
+
+- Convox rack on AWS with Route53
+- DNS zone managed by Route53
+- IAM permissions to manage Route53
+
+### Configuration Steps
+
+<Steps>
+  <Step title="Get cert-manager IAM role">
+    Retrieve the IAM role ARN used by cert-manager:
+    
+    ```bash
+    $ convox letsencrypt dns route53 role
+    arn:aws:iam::123456789012:role/convox/my-rack-cert-manager
+    ```
+  </Step>
+  
+  <Step title="Create Route53 access role">
+    Create an IAM role with permissions to manage your Route53 hosted zone.
+    
+    **Policy document** (replace `<zone-id>` with your hosted zone ID):
+    
+    ```json
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Action": "route53:GetChange",
+          "Resource": "arn:aws:route53:::change/*"
+        },
+        {
+          "Effect": "Allow",
+          "Action": [
+            "route53:ChangeResourceRecordSets",
+            "route53:ListResourceRecordSets"
+          ],
+          "Resource": "arn:aws:route53:::hostedzone/<zone-id>"
+        }
+      ]
+    }
+    ```
+  </Step>
+  
+  <Step title="Configure trust relationship">
+    Update the trust policy to allow cert-manager to assume this role:
+    
+    ```json
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "AWS": "arn:aws:iam::123456789012:role/convox/my-rack-cert-manager"
+          },
+          "Action": "sts:AssumeRole"
+        }
+      ]
+    }
+    ```
+  </Step>
+  
+  <Step title="Add assume role permission">
+    Add permission to the cert-manager role to assume the Route53 role:
+    
+    ```json
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Action": "sts:AssumeRole",
+          "Resource": "arn:aws:iam::123456789012:role/dns-access"
+        }
+      ]
+    }
+    ```
+  </Step>
+  
+  <Step title="Configure DNS solver">
+    Register the DNS solver with Convox:
+    
+    ```bash
+    $ convox letsencrypt dns route53 add \
+      --id 1 \
+      --dns-zones example.com \
+      --role arn:aws:iam::123456789012:role/dns-access \
+      --hosted-zone-id Z1234567890ABC \
+      --region us-east-1
+    ```
+  </Step>
+  
+  <Step title="Verify configuration">
+    Confirm the DNS solver is configured:
+    
+    ```bash
+    $ convox letsencrypt dns route53 list
+    ID  DNS_ZONES      HOSTED_ZONE_ID     REGION      ROLE_ARN
+    1   example.com    Z1234567890ABC     us-east-1   arn:aws:iam::123456789012:role/dns-access
+    ```
+  </Step>
+</Steps>
+
+### Generate Certificate with DNS-01
+
+Once configured, generate wildcard certificates:
+
+```bash
+$ convox certs generate "*.example.com" "example.com" --issuer letsencrypt
+Generating certificate... OK, cert-wildcard789
+```
+
+The DNS-01 challenge will automatically:
+1. Create TXT records in Route53
+2. Wait for DNS propagation
+3. Complete Let's Encrypt validation
+4. Clean up TXT records
+5. Issue the certificate
+
+## Advanced Certificate Configuration
+
+### Explicit Certificate Assignment
+
+Manually specify which certificate to use for a service:
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    domain: myapp.example.org
+    certificate:
+      id: cert-abc123def456
+```
+
+This is useful when:
+- You have multiple certificates for the same domain
+- You want to control exactly which certificate is used
+- You're testing certificate changes
+
+### Multi-Domain Certificates
+
+Cover multiple domains with a single certificate:
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    domain: www.example.org,example.org,app.example.org
+```
+
+Convox will generate a single certificate covering all three domains.
+
+### Certificate Per Service
+
+Different services can use different certificates:
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    domain: www.example.org
+    certificate:
+      id: cert-web123
+  
+  api:
+    build: .
+    port: 8080
+    domain: api.example.org
+    certificate:
+      id: cert-api456
+```
+
+## Certificate Renewal
+
+Convox automatically handles certificate renewal.
+
+### Automatic Renewal Process
+
+<Steps>
+  <Step title="30 days before expiration">
+    Convox begins the renewal process.
+  </Step>
+  
+  <Step title="Request new certificate">
+    A new certificate is requested from Let's Encrypt.
+  </Step>
+  
+  <Step title="Validate domain">
+    Domain validation is performed (HTTP-01 or DNS-01).
+  </Step>
+  
+  <Step title="Install new certificate">
+    The new certificate is installed, replacing the old one.
+  </Step>
+  
+  <Step title="Zero downtime">
+    The transition happens seamlessly with no service interruption.
+  </Step>
+</Steps>
+
+<Note>
+You don't need to do anything for certificate renewal. It happens automatically in the background.
+</Note>
+
+### Monitoring Renewal
+
+Check certificate expiration dates:
+
+```bash
+$ convox certs --generated
+ID                          DOMAIN                   EXPIRES
+cert-abc123def456           myapp.example.org        2025-06-15 10:30:00
+```
+
+Set up alerts for certificates expiring soon:
+
+```bash
+# Check if any certificates expire within 30 days
+$ convox certs --generated | awk 'NR>1 {print $3}' | while read expiry; do
+  days_until=$(( ($(date -d "$expiry" +%s) - $(date +%s)) / 86400 ))
+  if [ $days_until -lt 30 ]; then
+    echo "Certificate expiring in $days_until days: $expiry"
+  fi
+done
+```
+
+## Security Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use HTTPS Only" icon="lock">
+    Configure your application to redirect all HTTP traffic to HTTPS.
+  </Card>
+  
+  <Card title="Enable HSTS" icon="shield-halved">
+    Implement HTTP Strict Transport Security to prevent protocol downgrade attacks.
+  </Card>
+  
+  <Card title="Monitor Certificates" icon="chart-line">
+    Set up monitoring to track certificate expiration and renewal status.
+  </Card>
+  
+  <Card title="Use Strong Ciphers" icon="key">
+    Convox uses modern TLS configuration with strong cipher suites by default.
+  </Card>
+  
+  <Card title="Protect Private Keys" icon="user-lock">
+    Private keys are securely managed by Convox and never exposed.
+  </Card>
+  
+  <Card title="Regular Audits" icon="magnifying-glass">
+    Periodically audit your SSL/TLS configuration using tools like SSL Labs.
+  </Card>
+  
+  <Card title="Plan for Rotation" icon="rotate">
+    Understand the automatic renewal process and have a manual renewal plan as backup.
+  </Card>
+  
+  <Card title="Separate Environments" icon="layer-group">
+    Use different certificates for staging and production environments.
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### Certificate Generation Fails
+
+**Symptoms**: Certificate generation returns an error
+
+**Possible causes**:
+- DNS not pointing to Convox yet
+- Port 80 not accessible for HTTP-01
+- DNS-01 not configured for wildcard
+- Rate limits hit
+
+**Solutions**:
+1. Verify DNS is pointing to Convox: `dig yourdomain.com`
+2. Ensure firewall allows port 80
+3. Configure DNS-01 for wildcard certificates
+4. Check Let's Encrypt rate limits (5 per domain per week)
+5. Review logs for specific error messages
+
+### Certificate Not Applied
+
+**Symptoms**: HTTPS shows wrong certificate or certificate error
+
+**Possible causes**:
+- Domain not in convox.yml
+- Certificate ID incorrect
+- Recent deployment not complete
+
+**Solutions**:
+1. Verify domain in convox.yml: `convox releases manifest -a myapp`
+2. Check certificate ID: `convox certs --generated`
+3. Redeploy application: `convox deploy -a myapp`
+4. Clear browser cache and retry
+
+### Wildcard Certificate Fails
+
+**Symptoms**: Wildcard certificate generation fails
+
+**Possible causes**:
+- DNS-01 not configured
+- IAM permissions incorrect
+- Route53 zone not accessible
+
+**Solutions**:
+1. Verify DNS-01 configuration: `convox letsencrypt dns route53 list`
+2. Check IAM role permissions
+3. Verify Route53 hosted zone ID
+4. Review cert-manager logs: `kubectl logs -n cert-manager-system`
+
+### Certificate Not Renewing
+
+**Symptoms**: Certificate expired or about to expire
+
+**Possible causes**:
+- Automatic renewal failed
+- DNS changes broke validation
+- cert-manager not running
+
+**Solutions**:
+1. Check certificate status: `convox certs --generated`
+2. Manually regenerate: `convox certs generate "yourdomain.com" --issuer letsencrypt`
+3. Verify DNS still points to Convox
+4. Check cert-manager pods: `kubectl get pods -n cert-manager-system`
+5. Review renewal logs for errors
+
+## Custom SSL Certificates
+
+If you have your own SSL certificates (not from Let's Encrypt), you can upload them:
+
+```bash
+$ convox certs import certificate.crt certificate.key
+Importing certificate... OK, cert-custom123456
+```
+
+Then reference in your convox.yml:
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    domain: myapp.example.org
+    certificate:
+      id: cert-custom123456
+```
+
+<Note>
+Custom certificates are not automatically renewed. You must manually renew and re-import them before expiration.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Custom Domains" icon="globe" href="/deployment/custom-domains">
+    Configure custom domains for your services
+  </Card>
+  
+  <Card title="Load Balancing" icon="scale-balanced" href="/reference/primitives/app/service">
+    Understand how HTTPS traffic is routed
+  </Card>
+  
+  <Card title="Security" icon="shield-halved" href="/reference/security">
+    Learn about Convox security features
+  </Card>
+  
+  <Card title="Deploying Changes" icon="upload" href="/deployment/deploying-changes">
+    Deploy your SSL configuration changes
+  </Card>
+</CardGroup>

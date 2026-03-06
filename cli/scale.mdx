@@ -1,0 +1,444 @@
+---
+title: scale
+description: Scale services and adjust resource allocation
+---
+
+The `scale` command allows you to adjust the number of processes, CPU allocation, and memory allocation for your application services. You can scale services up or down to handle varying load or optimize resource usage.
+
+## Usage
+
+```bash
+convox scale <service>
+```
+
+### Arguments
+
+<ParamField path="service" type="string">
+  Service name to scale (optional when viewing current scale)
+</ParamField>
+
+## Flags
+
+<ParamField path="--app" type="string" default="-a">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string" default="-r">
+  Rack name
+</ParamField>
+
+<ParamField path="--count" type="integer" default="-c">
+  Number of processes to run
+</ParamField>
+
+<ParamField path="--cpu" type="integer">
+  CPU units in millicores (e.g., 256, 512, 1024)
+</ParamField>
+
+<ParamField path="--memory" type="integer" default="-m">
+  Memory in megabytes (e.g., 512, 1024, 2048)
+</ParamField>
+
+## Examples
+
+### View Current Scale
+
+View scaling information for all services:
+
+```bash
+$ convox scale
+SERVICE  DESIRED  RUNNING  CPU   MEMORY
+web      2        2        256   512
+worker   1        1        512   1024
+```
+
+### Scale Process Count
+
+Scale the number of processes for a service:
+
+```bash
+$ convox scale web --count 3
+Scaling web...
+2020-01-22T14:54:50Z system/cloudformation aws/cfm myapp UPDATE_IN_PROGRESS
+2020-01-22T14:54:59Z system/cloudformation aws/cfm myapp-ServiceWeb UPDATE_IN_PROGRESS
+2020-01-22T14:57:53Z system/cloudformation aws/cfm myapp-ServiceWeb UPDATE_COMPLETE
+2020-01-22T14:57:54Z system/cloudformation aws/cfm myapp UPDATE_COMPLETE
+OK
+```
+
+### Scale CPU
+
+Adjust CPU allocation:
+
+```bash
+$ convox scale web --cpu 512
+Scaling web...
+OK
+```
+
+CPU is measured in millicores:
+- `256` = 0.25 CPU cores
+- `512` = 0.5 CPU cores
+- `1024` = 1 CPU core
+- `2048` = 2 CPU cores
+
+### Scale Memory
+
+Adjust memory allocation:
+
+```bash
+$ convox scale web --memory 1024
+Scaling web...
+OK
+```
+
+Memory is measured in megabytes:
+- `512` = 512 MB
+- `1024` = 1 GB
+- `2048` = 2 GB
+- `4096` = 4 GB
+
+### Scale Multiple Resources
+
+Adjust count, CPU, and memory simultaneously:
+
+```bash
+$ convox scale web --count 3 --cpu 256 --memory 1024
+Scaling web...
+2020-01-22T14:54:50Z system/cloudformation aws/cfm myapp UPDATE_IN_PROGRESS
+2020-01-22T14:54:59Z system/cloudformation aws/cfm myapp-ServiceWeb UPDATE_IN_PROGRESS
+2020-01-22T14:57:53Z system/cloudformation aws/cfm myapp-ServiceWeb UPDATE_COMPLETE
+2020-01-22T14:57:54Z system/cloudformation aws/cfm myapp UPDATE_COMPLETE
+OK
+```
+
+## Scaling Strategies
+
+### Horizontal Scaling (Process Count)
+
+Increase or decrease the number of processes:
+
+```bash
+# Scale up for high traffic
+convox scale web --count 5
+
+# Scale down to reduce costs
+convox scale web --count 1
+
+# Scale to zero (stop service)
+convox scale background-worker --count 0
+```
+
+<Note>
+  Horizontal scaling distributes load across multiple processes. This is ideal for stateless services that can handle concurrent requests.
+</Note>
+
+### Vertical Scaling (CPU/Memory)
+
+Increase or decrease resources per process:
+
+```bash
+# Increase resources for memory-intensive tasks
+convox scale worker --cpu 2048 --memory 4096
+
+# Decrease for lightweight services
+convox scale api --cpu 256 --memory 512
+```
+
+<Note>
+  Vertical scaling provides more resources to each process. This is useful for CPU or memory-intensive workloads.
+</Note>
+
+### Combined Scaling
+
+Optimize both dimensions:
+
+```bash
+# High traffic, moderate resource needs
+convox scale web --count 10 --cpu 512 --memory 1024
+
+# Low traffic, high resource needs
+convox scale processing --count 2 --cpu 2048 --memory 8192
+```
+
+## Understanding Scale Output
+
+```bash
+$ convox scale
+SERVICE  DESIRED  RUNNING  CPU   MEMORY
+web      3        3        512   1024
+worker   2        2        1024  2048
+api      1        0        256   512
+```
+
+<ParamField path="SERVICE" type="string">
+  Service name from convox.yml
+</ParamField>
+
+<ParamField path="DESIRED" type="integer">
+  Target number of processes
+</ParamField>
+
+<ParamField path="RUNNING" type="integer">
+  Current number of healthy processes
+</ParamField>
+
+<ParamField path="CPU" type="integer">
+  Millicores per process
+</ParamField>
+
+<ParamField path="MEMORY" type="integer">
+  Megabytes per process
+</ParamField>
+
+## Autoscaling
+
+While the `scale` command sets static values, you can configure autoscaling in your `convox.yml`:
+
+```yaml
+services:
+  web:
+    scale:
+      count:
+        min: 2
+        max: 10
+      targets:
+        cpu: 70        # Target 70% CPU utilization
+        memory: 80     # Target 80% memory utilization
+        requests: 100  # Target 100 requests per process
+```
+
+With autoscaling configured, Convox automatically adjusts process count based on load.
+
+## Common Scaling Scenarios
+
+### High Traffic Periods
+
+Scale up before expected traffic:
+
+```bash
+# Before peak hours
+convox scale web --count 10
+
+# After peak hours
+convox scale web --count 3
+```
+
+### Memory-Intensive Jobs
+
+```bash
+# Scale up for data processing
+convox scale worker --memory 8192
+
+# Scale back down after completion
+convox scale worker --memory 2048
+```
+
+### Cost Optimization
+
+Reduce resources during low usage:
+
+```bash
+# Development environment during off-hours
+convox scale web --count 1 --cpu 256 --memory 512
+convox scale worker --count 0
+```
+
+### Zero Downtime Scaling
+
+Scale up before scaling down:
+
+```bash
+# Scale to 4 processes
+convox scale web --count 4
+
+# Wait for new processes to be healthy
+convox ps
+
+# Services automatically redistributes load
+```
+
+## Resource Planning
+
+### Estimating CPU Needs
+
+- **Light API**: 256-512 millicores
+- **Web App**: 512-1024 millicores
+- **Background Jobs**: 1024-2048 millicores
+- **Heavy Processing**: 2048+ millicores
+
+### Estimating Memory Needs
+
+- **Lightweight API**: 256-512 MB
+- **Node.js App**: 512-1024 MB
+- **Rails App**: 1024-2048 MB
+- **Java App**: 2048-4096 MB
+- **Data Processing**: 4096+ MB
+
+### Container Limits
+
+Ensure your rack has sufficient capacity:
+
+```bash
+# Check rack capacity
+convox rack ps --all
+
+# Scale rack if needed
+convox rack scale --count 5 --type t3.large
+```
+
+## Monitoring After Scaling
+
+### Check Process Status
+
+```bash
+# Verify processes started
+convox ps
+
+# Watch process status
+convox ps --watch
+```
+
+### Monitor Resource Usage
+
+```bash
+# Check logs for errors
+convox logs --service web
+
+# Monitor metrics in Console
+# (visit Convox Console > App > Metrics)
+```
+
+### Verify Scale Changes
+
+```bash
+# Confirm new scale settings
+convox scale
+
+# Check service details
+convox services
+```
+
+## Troubleshooting
+
+### Insufficient Capacity
+
+```bash
+# Problem: Not enough rack capacity
+$ convox scale web --count 10
+Error: insufficient capacity
+
+# Solution: Scale the rack
+$ convox rack scale --count 5
+```
+
+### OOM (Out of Memory) Errors
+
+```bash
+# Problem: Processes crashing with OOM
+$ convox logs --service web
+Error: OOM killed
+
+# Solution: Increase memory allocation
+$ convox scale web --memory 2048
+```
+
+### Slow Performance
+
+```bash
+# Problem: High CPU usage
+# Check metrics in Console or logs
+
+# Solution: Increase CPU or process count
+$ convox scale web --cpu 1024
+# Or
+$ convox scale web --count 5
+```
+
+### Scaling Takes Too Long
+
+Scaling triggers a CloudFormation update, which can take several minutes:
+
+1. Monitor progress: `convox logs --rack`
+2. Check CloudFormation events in AWS Console
+3. Ensure health checks are passing
+
+## Best Practices
+
+### 1. Start Small, Scale Up
+
+```bash
+# Start with minimal resources
+convox scale web --count 2 --cpu 256 --memory 512
+
+# Monitor and adjust as needed
+convox scale web --cpu 512 --memory 1024
+```
+
+### 2. Use Autoscaling
+
+Prefer autoscaling over manual scaling for variable load:
+
+```yaml
+services:
+  web:
+    scale:
+      count:
+        min: 2
+        max: 10
+      targets:
+        cpu: 70
+```
+
+### 3. Monitor After Changes
+
+Always verify scaling operations:
+
+```bash
+$ convox scale web --count 5
+OK
+
+$ convox ps
+# Verify 5 web processes are running
+
+$ convox logs --service web
+# Check for errors
+```
+
+### 4. Test Before Production
+
+Test scaling in staging first:
+
+```bash
+# Staging
+convox scale web --count 10 --app myapp-staging
+
+# If successful, apply to production
+convox scale web --count 10 --app myapp-production
+```
+
+### 5. Document Scaling Decisions
+
+Keep track of why you scaled:
+
+```bash
+# Good practice
+convox scale web --count 5  # Black Friday traffic increase
+```
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="PS" icon="list" href="/cli/ps">
+    View running processes
+  </Card>
+  <Card title="Services" icon="server" href="/cli/services">
+    List application services
+  </Card>
+  <Card title="Rack Scale" icon="layer-group" href="/cli/rack">
+    Scale rack infrastructure
+  </Card>
+  <Card title="Logs" icon="scroll" href="/cli/logs">
+    Monitor service logs
+  </Card>
+</CardGroup>

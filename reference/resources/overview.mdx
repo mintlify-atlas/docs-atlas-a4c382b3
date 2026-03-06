@@ -1,0 +1,227 @@
+---
+title: "Resources Overview"
+description: "Network-accessible external services for your Convox applications"
+---
+
+## What are Resources?
+
+A Resource is a network-accessible external service that your application depends on. Resources are defined in `convox.yml` and linked to one or more [Services](/reference/primitives/app/service), making them available through environment variables.
+
+## Resource Types
+
+Convox supports both containerized and managed cloud resources:
+
+<CardGroup cols={2}>
+  <Card title="Postgres" icon="database" href="/reference/resources/postgres">
+    PostgreSQL database - containerized or AWS RDS
+  </Card>
+  <Card title="MySQL" icon="database" href="/reference/resources/mysql">
+    MySQL database - containerized or AWS RDS
+  </Card>
+  <Card title="Redis" icon="server" href="/reference/resources/redis">
+    Redis cache - containerized or AWS ElastiCache
+  </Card>
+  <Card title="Memcached" icon="memory" href="/reference/resources/memcached">
+    Memcached cache - containerized or AWS ElastiCache
+  </Card>
+  <Card title="S3" icon="bucket" href="/reference/resources/s3">
+    AWS S3 object storage
+  </Card>
+  <Card title="SQS" icon="message" href="/reference/resources/sqs">
+    AWS SQS message queue
+  </Card>
+</CardGroup>
+
+## Basic Usage
+
+Define resources in your `convox.yml` and link them to services:
+
+```yaml
+resources:
+  database:
+    type: postgres
+  cache:
+    type: redis
+
+services:
+  web:
+    resources:
+      - database
+      - cache
+```
+
+## Environment Variables
+
+When a resource is linked to a service, Convox automatically injects environment variables with connection details:
+
+<ParamField path="RESOURCE_URL" type="string">
+  Complete connection URL for the resource
+</ParamField>
+
+<ParamField path="RESOURCE_HOST" type="string">
+  Hostname of the resource
+</ParamField>
+
+<ParamField path="RESOURCE_PORT" type="string">
+  Port number of the resource
+</ParamField>
+
+<ParamField path="RESOURCE_USER" type="string">
+  Username for authentication (databases only)
+</ParamField>
+
+<ParamField path="RESOURCE_PASS" type="string">
+  Password for authentication (databases only)
+</ParamField>
+
+<ParamField path="RESOURCE_NAME" type="string">
+  Database name (databases only)
+</ParamField>
+
+### Example
+
+For a `postgres` resource named `database`:
+
+```bash
+DATABASE_URL=postgres://username:password@host.name:5432/database
+DATABASE_USER=username
+DATABASE_PASS=password
+DATABASE_HOST=host.name
+DATABASE_PORT=5432
+DATABASE_NAME=database
+```
+
+## Containerized vs Managed Resources
+
+### Containerized Resources
+
+By default, resources run as containers within your Rack. This approach:
+
+- Gets you up and running quickly
+- Provides cost-effective solutions for development/staging
+- Runs alongside your application services
+
+Supported types: `postgres`, `mysql`, `mariadb`, `redis`, `memcached`, `postgis`
+
+### Managed Resources
+
+For production environments, use managed cloud services:
+
+- **AWS RDS**: `rds-postgres`, `rds-mysql`, `rds-mariadb`
+- **AWS ElastiCache**: `elasticache-redis`, `elasticache-memcached`
+
+<Note>
+Managed resources provide enhanced durability, automated backups, high availability, and operational best practices.
+</Note>
+
+## Custom Images
+
+You can use custom Docker images for containerized resources:
+
+```yaml
+resources:
+  database:
+    type: postgres
+    image: pgvector/pgvector:pg16
+```
+
+<Warning>
+Always include an image tag. If omitted, `:latest` will be used, which may cause unexpected behavior.
+</Warning>
+
+## Resource Overlays
+
+Resource overlays allow you to use containerized resources in some environments and managed services in others.
+
+To overlay a resource, set its environment variable manually:
+
+```bash
+convox env set DATABASE_URL=postgres://user:pass@prod-db.amazonaws.com:5432/db -a myapp -r production
+```
+
+When the `DATABASE_URL` environment variable is set, Convox won't start the containerized resource. Your app will use the external database instead.
+
+<Note>
+This pattern is ideal for using local resources in development and managed services in production.
+</Note>
+
+## CLI Commands
+
+### List Resources
+
+```bash
+convox resources -a myapp
+```
+
+### Get Resource Info
+
+```bash
+convox resources info <name> -a myapp
+```
+
+### Get Resource URL
+
+```bash
+convox resources url <name> -a myapp
+```
+
+### Start a Console
+
+```bash
+convox resources console <name> -a myapp
+```
+
+### Proxy to Resource
+
+```bash
+convox resources proxy <name> -a myapp
+```
+
+This creates a local tunnel, allowing you to connect local tools to resources running in the Rack.
+
+### Export Data
+
+```bash
+convox resources export <name> -f /tmp/backup.sql -a myapp
+```
+
+### Import Data
+
+```bash
+convox resources import <name> -f /tmp/backup.sql -a myapp
+```
+
+<Note>
+Export and import are only available for database resources (postgres, mysql, mariadb).
+</Note>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Managed Resources in Production" icon="shield-check">
+    Leverage AWS RDS and ElastiCache for production workloads to get automated backups, high availability, and operational excellence.
+  </Card>
+  <Card title="Enable Deletion Protection" icon="lock">
+    Always enable `deletionProtection: true` for production databases to prevent accidental deletion.
+  </Card>
+  <Card title="Use Resource Overlays" icon="layer-group">
+    Keep your convox.yml consistent across environments and use overlays to switch between containerized and managed resources.
+  </Card>
+  <Card title="Monitor Resource Usage" icon="chart-line">
+    Track resource metrics and adjust storage, memory, and compute capacity as needed.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Postgres" icon="database" href="/reference/resources/postgres">
+    Configure PostgreSQL databases
+  </Card>
+  <Card title="Redis" icon="server" href="/reference/resources/redis">
+    Set up Redis caching
+  </Card>
+  <Card title="S3" icon="bucket" href="/reference/resources/s3">
+    Use S3 for object storage
+  </Card>
+</CardGroup>

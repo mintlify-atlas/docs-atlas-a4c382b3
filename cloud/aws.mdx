@@ -1,0 +1,833 @@
+---
+title: "Amazon Web Services (AWS)"
+description: "Install and configure Convox on Amazon Web Services with EKS"
+---
+
+# Amazon Web Services (AWS)
+
+Deploy Convox on AWS using Amazon EKS (Elastic Kubernetes Service) for a production-ready, scalable infrastructure. Convox on AWS provides full control over your infrastructure with extensive configuration options.
+
+<Note>
+The easiest way to install a Rack is with the [Convox Web Console](https://console.convox.com). These instructions are for command-line installation.
+</Note>
+
+## Prerequisites
+
+Before installing Convox on AWS, ensure you have the following tools installed and configured:
+
+<Steps>
+  <Step title="Install AWS CLI">
+    Download and install the AWS CLI to interact with AWS services.
+    
+    ```bash
+    # macOS
+    brew install awscli
+    
+    # Linux
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+    unzip awscliv2.zip
+    sudo ./aws/install
+    ```
+    
+    [AWS CLI Installation Guide](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html)
+  </Step>
+
+  <Step title="Install Terraform">
+    Convox uses Terraform to provision AWS infrastructure.
+    
+    ```bash
+    # macOS
+    brew tap hashicorp/tap
+    brew install hashicorp/tap/terraform
+    
+    # Linux
+    wget https://releases.hashicorp.com/terraform/1.6.0/terraform_1.6.0_linux_amd64.zip
+    unzip terraform_1.6.0_linux_amd64.zip
+    sudo mv terraform /usr/local/bin/
+    ```
+    
+    [Terraform Installation Guide](https://learn.hashicorp.com/terraform/getting-started/install.html)
+  </Step>
+
+  <Step title="Install Convox CLI">
+    Install the Convox CLI to manage your racks and applications.
+    
+    ```bash
+    # macOS
+    curl -L https://github.com/convox/convox/releases/latest/download/convox-macos -o /tmp/convox
+    
+    # Linux
+    curl -L https://github.com/convox/convox/releases/latest/download/convox-linux -o /tmp/convox
+    
+    sudo mv /tmp/convox /usr/local/bin/convox
+    sudo chmod 755 /usr/local/bin/convox
+    ```
+    
+    [Convox CLI Documentation](/installation/cli)
+  </Step>
+</Steps>
+
+## AWS IAM Configuration
+
+Convox requires AWS credentials with appropriate permissions to provision infrastructure.
+
+### Required Environment Variables
+
+<ParamField path="AWS_ACCESS_KEY_ID" type="string" required>
+  AWS access key ID for authentication
+</ParamField>
+
+<ParamField path="AWS_SECRET_ACCESS_KEY" type="string" required>
+  AWS secret access key for authentication
+</ParamField>
+
+### Create IAM User
+
+Create a dedicated IAM user for Convox with AdministratorAccess:
+
+```bash
+# Create the IAM user
+aws iam create-user --user-name convox
+
+# Attach administrator policy
+aws iam attach-user-policy --user-name convox --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
+
+# Create access keys
+aws iam create-access-key --user-name convox
+```
+
+The output will contain:
+- **AccessKeyId** → Use as `AWS_ACCESS_KEY_ID`
+- **SecretAccessKey** → Use as `AWS_SECRET_ACCESS_KEY`
+
+<Warning>
+Store your AWS credentials securely. Never commit them to version control.
+</Warning>
+
+### Export Credentials
+
+```bash
+export AWS_ACCESS_KEY_ID=your-access-key-id
+export AWS_SECRET_ACCESS_KEY=your-secret-access-key
+```
+
+## Installation
+
+Install a Convox Rack on AWS using the CLI:
+
+```bash
+convox rack install aws <rack-name> [param1=value1] [param2=value2]...
+```
+
+### Basic Installation
+
+```bash
+# Install with default settings
+convox rack install aws production
+
+# Install in specific region
+convox rack install aws production region=us-west-2
+
+# Install with custom node type
+convox rack install aws production region=eu-west-1 node_type=t3.medium
+```
+
+### Installation with High Availability
+
+```bash
+convox rack install aws production \
+  region=us-east-1 \
+  high_availability=true \
+  node_type=t3.medium \
+  availability_zones=us-east-1a,us-east-1b,us-east-1c
+```
+
+## Configuration Parameters
+
+Convox on AWS supports extensive configuration options. Below are the key parameters:
+
+### Core Infrastructure
+
+<ParamField path="region" type="string" default="us-east-1">
+  AWS region where the rack will be deployed
+  
+  ```bash
+  convox rack install aws mystack region=us-west-2
+  ```
+</ParamField>
+
+<ParamField path="cidr" type="string" default="10.1.0.0/16">
+  CIDR block for the VPC. Must not overlap with existing VPCs if using VPC peering.
+  
+  ```bash
+  convox rack install aws mystack cidr=10.2.0.0/16
+  ```
+</ParamField>
+
+<ParamField path="availability_zones" type="string">
+  Comma-separated list of availability zones (minimum 3 for high availability)
+  
+  ```bash
+  convox rack install aws mystack availability_zones=us-east-1a,us-east-1b,us-east-1c
+  ```
+</ParamField>
+
+### Node Configuration
+
+<ParamField path="node_type" type="string" default="t3.small">
+  EC2 instance type for cluster nodes. Supports comma-separated list for multiple instance types.
+  
+  **Common Options:**
+  - `t3.small` - 2 vCPU, 2 GB RAM (cost-effective)
+  - `t3.medium` - 2 vCPU, 4 GB RAM (general purpose)
+  - `t3.large` - 2 vCPU, 8 GB RAM (memory-intensive)
+  - `m5.large` - 2 vCPU, 8 GB RAM (balanced)
+  - `c5.xlarge` - 4 vCPU, 8 GB RAM (compute-optimized)
+  - `r5.large` - 2 vCPU, 16 GB RAM (memory-optimized)
+  - `t4g.*`, `m6g.*` - ARM-based Graviton instances
+  - `p3.*`, `g4dn.*` - GPU instances
+  
+  ```bash
+  convox rack install aws mystack node_type=t3.medium
+  ```
+</ParamField>
+
+<ParamField path="node_disk" type="number" default={20}>
+  Node disk size in GB for each EKS node
+  
+  ```bash
+  convox rack install aws mystack node_disk=50
+  ```
+</ParamField>
+
+<ParamField path="node_capacity_type" type="string" default="on_demand">
+  Node capacity type for cost optimization
+  
+  **Options:**
+  - `on_demand` - Standard EC2 instances with guaranteed availability
+  - `spot` - Use spot instances for up to 90% cost savings
+  - `mixed` - Combination of on-demand and spot instances
+  
+  ```bash
+  convox rack install aws mystack node_capacity_type=spot
+  ```
+</ParamField>
+
+<ParamField path="min_on_demand_count" type="number" default={1}>
+  Minimum number of on-demand nodes when using `mixed` capacity type
+  
+  ```bash
+  convox rack install aws mystack node_capacity_type=mixed min_on_demand_count=2
+  ```
+</ParamField>
+
+<ParamField path="max_on_demand_count" type="number" default={100}>
+  Maximum number of on-demand nodes when using `mixed` capacity type
+  
+  ```bash
+  convox rack install aws mystack node_capacity_type=mixed max_on_demand_count=5
+  ```
+</ParamField>
+
+### Build Nodes
+
+<ParamField path="build_node_enabled" type="boolean" default={false}>
+  Enable dedicated nodes for application builds to isolate build workloads from application workloads
+  
+  ```bash
+  convox rack install aws mystack build_node_enabled=true
+  ```
+</ParamField>
+
+<ParamField path="build_node_type" type="string">
+  Instance type for build nodes (defaults to same as `node_type`)
+  
+  ```bash
+  convox rack install aws mystack build_node_enabled=true build_node_type=c5.xlarge
+  ```
+</ParamField>
+
+<ParamField path="build_node_min_count" type="number" default={0}>
+  Minimum number of build nodes to keep running
+  
+  ```bash
+  convox rack install aws mystack build_node_enabled=true build_node_min_count=1
+  ```
+</ParamField>
+
+### High Availability
+
+<ParamField path="high_availability" type="boolean" default={true}>
+  Deploy with redundant resources across multiple availability zones
+  
+  When enabled:
+  - Resources span 3 availability zones
+  - NAT gateways in each AZ
+  - RDS Multi-AZ for databases
+  
+  Set to `false` for development/testing to reduce costs.
+  
+  ```bash
+  convox rack install aws mystack high_availability=false
+  ```
+</ParamField>
+
+### Network Configuration
+
+<ParamField path="private" type="boolean" default={true}>
+  Place nodes in private subnets behind NAT gateways for enhanced security
+  
+  ```bash
+  convox rack install aws mystack private=true
+  ```
+</ParamField>
+
+<ParamField path="vpc_id" type="string">
+  Use an existing VPC instead of creating a new one. Must also specify `cidr` and `internet_gateway_id`.
+  
+  ```bash
+  convox rack install aws mystack vpc_id=vpc-1234567890abcdef0 cidr=10.0.0.0/16 internet_gateway_id=igw-1234567890abcdef0
+  ```
+</ParamField>
+
+<ParamField path="internet_gateway_id" type="string">
+  Internet gateway ID when using an existing VPC
+  
+  ```bash
+  convox rack install aws mystack vpc_id=vpc-xxx internet_gateway_id=igw-xxx
+  ```
+</ParamField>
+
+<ParamField path="private_subnets_ids" type="string">
+  Comma-separated list of existing private subnet IDs (requires 3 for high availability)
+  
+  ```bash
+  convox rack install aws mystack vpc_id=vpc-xxx private_subnets_ids=subnet-111,subnet-222,subnet-333
+  ```
+</ParamField>
+
+<ParamField path="public_subnets_ids" type="string">
+  Comma-separated list of existing public subnet IDs (requires 3 for high availability)
+  
+  ```bash
+  convox rack install aws mystack vpc_id=vpc-xxx public_subnets_ids=subnet-aaa,subnet-bbb,subnet-ccc
+  ```
+</ParamField>
+
+### Load Balancer Configuration
+
+<ParamField path="internal_router" type="boolean" default={false}>
+  Create an internal load balancer within the VPC instead of public-facing
+  
+  ```bash
+  convox rack install aws mystack internal_router=true
+  ```
+</ParamField>
+
+<ParamField path="idle_timeout" type="number" default={3600}>
+  Idle timeout in seconds for the Network Load Balancer
+  
+  ```bash
+  convox rack install aws mystack idle_timeout=300
+  ```
+</ParamField>
+
+<ParamField path="proxy_protocol" type="boolean" default={false}>
+  Enable Proxy Protocol to preserve client IP addresses in the `x-forwarded-for` header
+  
+  <Warning>
+  Enabling this parameter requires 5-10 minutes of downtime
+  </Warning>
+  
+  ```bash
+  convox rack install aws mystack proxy_protocol=true
+  ```
+</ParamField>
+
+<ParamField path="nlb_security_group" type="string">
+  Security group ID to attach to the Network Load Balancer
+  
+  <Warning>
+  Be careful with this setting - incorrect security groups may block access to your services
+  </Warning>
+  
+  ```bash
+  convox rack install aws mystack nlb_security_group=sg-1234567890abcdef0
+  ```
+</ParamField>
+
+### Security & Access Control
+
+<ParamField path="key_pair_name" type="string">
+  AWS EC2 key pair name for SSH access to nodes
+  
+  ```bash
+  convox rack install aws mystack key_pair_name=my-keypair
+  ```
+</ParamField>
+
+<ParamField path="imds_http_tokens" type="string" default="optional">
+  Instance Metadata Service version requirement
+  
+  **Options:**
+  - `optional` - IMDSv1 and IMDSv2 both allowed
+  - `required` - Only IMDSv2 allowed (more secure)
+  
+  ```bash
+  convox rack install aws mystack imds_http_tokens=required
+  ```
+</ParamField>
+
+<ParamField path="tags" type="string">
+  Custom tags to add to all AWS resources (comma-separated key=value pairs)
+  
+  ```bash
+  convox rack install aws mystack tags="Environment=production,Team=platform,CostCenter=engineering"
+  ```
+</ParamField>
+
+### Storage & Encryption
+
+<ParamField path="efs_csi_driver_enable" type="boolean" default={false}>
+  Enable AWS EFS CSI driver for elastic file system volumes
+  
+  ```bash
+  convox rack install aws mystack efs_csi_driver_enable=true
+  ```
+</ParamField>
+
+<ParamField path="ebs_volume_encryption_enabled" type="boolean" default={true}>
+  Enable encryption for EBS volumes used by nodes
+  
+  ```bash
+  convox rack install aws mystack ebs_volume_encryption_enabled=true
+  ```
+</ParamField>
+
+### Logging & Monitoring
+
+<ParamField path="syslog" type="string">
+  Forward logs to an external syslog endpoint
+  
+  **Format:** `tcp+tls://hostname:port` or `udp://hostname:port`
+  
+  ```bash
+  convox rack install aws mystack syslog=tcp+tls://logs.example.com:514
+  ```
+</ParamField>
+
+<ParamField path="access_log_retention_in_days" type="number" default={7}>
+  Retention period for nginx access logs in CloudWatch Logs
+  
+  ```bash
+  convox rack install aws mystack access_log_retention_in_days=30
+  ```
+</ParamField>
+
+<ParamField path="fluentd_disable" type="boolean" default={false}>
+  Disable Fluentd log collection
+  
+  ```bash
+  convox rack install aws mystack fluentd_disable=true
+  ```
+</ParamField>
+
+### SSL/TLS Configuration
+
+<ParamField path="cert_duration" type="string" default="2160h">
+  Certificate renewal period (90 days by default)
+  
+  ```bash
+  convox rack install aws mystack cert_duration=720h
+  ```
+</ParamField>
+
+<ParamField path="ssl_ciphers" type="string">
+  SSL cipher suites for nginx (colon-separated)
+  
+  ```bash
+  convox rack install aws mystack ssl_ciphers="ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384"
+  ```
+</ParamField>
+
+<ParamField path="ssl_protocols" type="string">
+  SSL/TLS protocol versions for nginx (space-separated)
+  
+  ```bash
+  convox rack install aws mystack ssl_protocols="TLSv1.2 TLSv1.3"
+  ```
+</ParamField>
+
+<ParamField path="convox_domain_tls_cert_disable" type="boolean" default={false}>
+  Disable automatic TLS certificate generation for *.convox.cloud domains
+  
+  ```bash
+  convox rack install aws mystack convox_domain_tls_cert_disable=true
+  ```
+</ParamField>
+
+### Advanced Features
+
+<ParamField path="pod_identity_agent_enable" type="boolean" default={false}>
+  Enable AWS EKS Pod Identity for fine-grained IAM permissions
+  
+  ```bash
+  convox rack install aws mystack pod_identity_agent_enable=true
+  ```
+</ParamField>
+
+<ParamField path="gpu_tag_enable" type="boolean" default={false}>
+  Enable GPU resource tagging (required for GPU workloads, not supported in all regions)
+  
+  ```bash
+  convox rack install aws mystack node_type=g4dn.xlarge gpu_tag_enable=true
+  ```
+</ParamField>
+
+<ParamField path="schedule_rack_scale_down" type="string">
+  Cron schedule for automatically scaling down the rack (UTC timezone)
+  
+  **Format:** Unix cron syntax: `[Minute] [Hour] [Day_of_Month] [Month_of_Year] [Day_of_Week]`
+  
+  ```bash
+  # Scale down at 6 PM UTC on Fridays
+  convox rack install aws mystack schedule_rack_scale_down="0 18 * * 5"
+  ```
+</ParamField>
+
+<ParamField path="schedule_rack_scale_up" type="string">
+  Cron schedule for automatically scaling up the rack (UTC timezone)
+  
+  <Note>
+  Both `schedule_rack_scale_down` and `schedule_rack_scale_up` must be set together
+  </Note>
+  
+  ```bash
+  # Scale up at midnight UTC on Sundays
+  convox rack install aws mystack schedule_rack_scale_up="0 0 * * 0"
+  ```
+</ParamField>
+
+<ParamField path="user_data" type="string">
+  Custom user data script to run on EC2 instances at launch
+  
+  ```bash
+  convox rack install aws mystack user_data="#!/bin/bash\necho 'Custom setup'"
+  ```
+</ParamField>
+
+<ParamField path="user_data_url" type="string">
+  URL to a custom user data script (for larger scripts)
+  
+  ```bash
+  convox rack install aws mystack user_data_url="https://example.com/setup.sh"
+  ```
+</ParamField>
+
+## EKS Cluster Endpoint Access
+
+Convox allows you to configure access to the Kubernetes API server endpoint through the Convox Console.
+
+### Access Modes
+
+<CardGroup cols={2}>
+  <Card title="Public" icon="globe">
+    **Default Mode**
+    
+    - EKS endpoint accessible from outside VPC
+    - Secured with authentication
+    - Best for: Standard deployments
+  </Card>
+  
+  <Card title="Public-Private" icon="globe-pointer">
+    **Hybrid Mode** (Requires v3.22.4+)
+    
+    - Both public and private access enabled
+    - External clients use public endpoint
+    - In-VPC resources use private endpoint
+    - Best for: Compliance requirements with external access
+  </Card>
+  
+  <Card title="Semi-Private" icon="shield-halved">
+    **Transitional Mode**
+    
+    - Temporarily switches to public during updates
+    - Reverts to private when complete
+    - Adds ~15 minutes to updates
+    - Best for: Older racks needing private mode
+  </Card>
+  
+  <Card title="Private" icon="lock">
+    **Maximum Security** (Requires v3.18.9+)
+    
+    - VPC-only access to API server
+    - Highest security level
+    - Full Convox API functionality maintained
+    - Best for: Security-critical deployments
+  </Card>
+</CardGroup>
+
+### Configuring Endpoint Access
+
+<Steps>
+  <Step title="Access Rack Settings">
+    1. Log into [Convox Console](https://console.convox.com)
+    2. Select your rack
+    3. Click the cogwheel icon (upper right)
+  </Step>
+  
+  <Step title="Navigate to Security Tab">
+    Go to the **Security** tab in Rack Settings
+  </Step>
+  
+  <Step title="Select Access Mode">
+    Choose your desired cluster endpoint access mode
+  </Step>
+  
+  <Step title="Wait for Update">
+    Allow ~10 minutes for the configuration to apply
+  </Step>
+</Steps>
+
+## Infrastructure Components
+
+When you install Convox on AWS, Terraform provisions:
+
+### Networking
+- **VPC** with configurable CIDR block
+- **Public subnets** (3 for HA) for load balancers
+- **Private subnets** (3 for HA) for EKS nodes
+- **NAT Gateways** (1 or 3 depending on HA setting)
+- **Internet Gateway** for public internet access
+- **Route tables** for subnet routing
+
+### Compute
+- **EKS Cluster** (Kubernetes control plane)
+- **EKS Node Groups** with auto-scaling
+- **EC2 Instances** for worker nodes
+- **Launch Templates** for node configuration
+
+### Storage
+- **EBS Volumes** for node storage
+- **S3 Bucket** for build artifacts and releases
+- **ECR Repositories** for Docker images
+- **EFS File System** (optional, when enabled)
+
+### Load Balancing
+- **Network Load Balancer** for ingress traffic
+- **Application Load Balancer** for internal routing
+
+### IAM & Security
+- **IAM Roles** for cluster and nodes
+- **IAM Policies** for AWS service access
+- **Security Groups** for network access control
+- **KMS Keys** for encryption (optional)
+
+### Monitoring & Logging
+- **CloudWatch Log Groups** for application logs
+- **CloudWatch Metrics** for cluster monitoring
+- **Fluentd DaemonSet** for log aggregation
+
+## IAM Permissions
+
+The IAM user/role used for installation requires these AWS managed policies:
+- `AdministratorAccess` (for initial installation)
+
+The Convox-created node IAM role includes:
+- `AmazonEKSWorkerNodePolicy`
+- `AmazonEKS_CNI_Policy`
+- `AmazonEC2ContainerRegistryReadOnly`
+- `AmazonEBSCSIDriverPolicy`
+- Custom policies for S3, ECR, and EKS access
+
+## Cost Optimization
+
+<CardGroup cols={2}>
+  <Card title="Spot Instances" icon="dollar-sign">
+    ```bash
+    convox rack install aws production \
+      node_capacity_type=spot
+    ```
+    
+    Save up to 90% on compute costs with spot instances
+  </Card>
+  
+  <Card title="Mixed Capacity" icon="scale-balanced">
+    ```bash
+    convox rack install aws production \
+      node_capacity_type=mixed \
+      min_on_demand_count=1 \
+      max_on_demand_count=3
+    ```
+    
+    Balance cost savings with availability
+  </Card>
+  
+  <Card title="Disable HA" icon="server">
+    ```bash
+    convox rack install aws staging \
+      high_availability=false
+    ```
+    
+    Reduce NAT gateway and multi-AZ costs for dev/staging
+  </Card>
+  
+  <Card title="ARM Instances" icon="microchip">
+    ```bash
+    convox rack install aws production \
+      node_type=t4g.medium
+    ```
+    
+    Save 20% with AWS Graviton processors
+  </Card>
+</CardGroup>
+
+## Production Best Practices
+
+<Steps>
+  <Step title="Enable High Availability">
+    ```bash
+    convox rack install aws production \
+      high_availability=true \
+      availability_zones=us-east-1a,us-east-1b,us-east-1c
+    ```
+  </Step>
+  
+  <Step title="Use Private Subnets">
+    ```bash
+    convox rack install aws production private=true
+    ```
+  </Step>
+  
+  <Step title="Enable Volume Encryption">
+    ```bash
+    convox rack install aws production ebs_volume_encryption_enabled=true
+    ```
+  </Step>
+  
+  <Step title="Configure Appropriate Instance Types">
+    ```bash
+    convox rack install aws production \
+      node_type=t3.large \
+      node_disk=50
+    ```
+  </Step>
+  
+  <Step title="Set up Logging">
+    ```bash
+    convox rack install aws production \
+      syslog=tcp+tls://logs.example.com:514 \
+      access_log_retention_in_days=30
+    ```
+  </Step>
+  
+  <Step title="Add Resource Tags">
+    ```bash
+    convox rack install aws production \
+      tags="Environment=production,Team=platform,CostCenter=engineering"
+    ```
+  </Step>
+</Steps>
+
+## Updating Rack Parameters
+
+After installation, you can update rack parameters:
+
+```bash
+# View current parameters
+convox rack params -r production
+
+# Update a parameter
+convox rack params set node_type=t3.large -r production
+
+# Update multiple parameters
+convox rack params set node_type=t3.large idle_timeout=300 -r production
+```
+
+<Warning>
+Some parameter changes may cause service interruption or require rack recreation. Review the documentation for each parameter before making changes.
+</Warning>
+
+## Troubleshooting
+
+### Installation Issues
+
+<Accordion title="Insufficient IAM permissions">
+  **Error:** `AccessDenied` or permission errors during installation
+  
+  **Solution:**
+  - Verify the IAM user has `AdministratorAccess` policy
+  - Check that AWS credentials are correctly exported
+  - Ensure credentials haven't expired
+</Accordion>
+
+<Accordion title="VPC CIDR conflicts">
+  **Error:** CIDR block overlaps with existing resources
+  
+  **Solution:**
+  ```bash
+  convox rack install aws production cidr=10.2.0.0/16
+  ```
+  
+  Use a different CIDR block that doesn't conflict with existing VPCs
+</Accordion>
+
+<Accordion title="Availability zone limitations">
+  **Error:** Instance type not available in selected AZ
+  
+  **Solution:**
+  ```bash
+  convox rack install aws production \
+    region=us-east-1 \
+    availability_zones=us-east-1a,us-east-1b,us-east-1d
+  ```
+  
+  Specify different availability zones or change instance type
+</Accordion>
+
+### Runtime Issues
+
+<Accordion title="Node scaling issues">
+  **Issue:** Nodes not scaling as expected
+  
+  **Solution:**
+  - Check EKS Auto Scaling Group limits in AWS Console
+  - Verify account service quotas for EC2 instances
+  - Review CloudWatch logs for Auto Scaling events
+</Accordion>
+
+<Accordion title="Load balancer not responding">
+  **Issue:** Cannot access applications via load balancer
+  
+  **Solution:**
+  - Check security groups allow inbound traffic on required ports
+  - Verify target health in AWS Target Groups
+  - Check application logs: `convox logs -a myapp`
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Deploy an Application" icon="rocket" href="/deployment/deploying-changes">
+    Learn how to deploy your first application to your new rack
+  </Card>
+  
+  <Card title="Configure Resources" icon="database" href="/reference/primitives/app/resource">
+    Set up databases, Redis, and other resources
+  </Card>
+  
+  <Card title="Custom Domains" icon="globe" href="/deployment/custom-domains">
+    Configure custom domains and SSL certificates
+  </Card>
+  
+  <Card title="Rack Management" icon="gears" href="/management/cli-rack-management">
+    Learn how to manage and update your rack
+  </Card>
+</CardGroup>
+
+## Additional Resources
+
+- [AWS Rack Parameters](/configuration/rack-parameters/aws) - Complete parameter reference
+- [EKS Best Practices](https://aws.github.io/aws-eks-best-practices/) - AWS official guide
+- [Convox Troubleshooting](/help/troubleshooting) - Common issues and solutions
+- [Community Forum](https://community.convox.com) - Get help from the community

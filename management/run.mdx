@@ -1,0 +1,303 @@
+---
+title: "Running One-Off Commands"
+description: "Execute one-off commands and interactive shells in your Convox applications"
+---
+
+# Running One-Off Commands
+
+Convox provides flexible options for running one-off commands in your applications, whether for debugging, database migrations, or administrative tasks.
+
+## Overview
+
+There are two primary ways to execute commands:
+
+<CardGroup cols={2}>
+  <Card title="convox run" icon="play">
+    Start a new process to run commands in a fresh container
+  </Card>
+  <Card title="convox exec" icon="terminal">
+    Execute commands in an existing running process
+  </Card>
+</CardGroup>
+
+## Running Commands with convox run
+
+The `convox run` command spawns a new process of the specified service and executes your command inside it.
+
+### Interactive Commands
+
+Run interactive shells or commands that require user input:
+
+<Steps>
+  <Step title="Start an interactive shell">
+    ```bash
+    convox run web bash
+    ```
+    
+    This connects your local terminal to a new process, allowing you to run commands interactively.
+  </Step>
+  
+  <Step title="Execute commands in the shell">
+    ```bash
+    root@web:/app# ls -la
+    root@web:/app# bundle exec rails console
+    root@web:/app# exit
+    ```
+  </Step>
+</Steps>
+
+<Note>
+  Interactive processes maintain a live connection to your terminal. When you exit, the process is terminated.
+</Note>
+
+### Detached Commands
+
+For long-running tasks that shouldn't be interrupted if your connection drops:
+
+```bash
+convox run web bin/cleanup-database --detach
+```
+
+**Output:**
+```
+Running detached process... OK, web-s43xf
+```
+
+<Warning>
+  Detached processes continue running even if you close your terminal. Monitor their output using `convox logs`.
+</Warning>
+
+### Common Use Cases
+
+<Accordion title="Database Migrations">
+  Run database migrations before or after deployments:
+  
+  ```bash
+  convox run web rake db:migrate
+  convox run web python manage.py migrate
+  convox run web npm run db:migrate
+  ```
+</Accordion>
+
+<Accordion title="Data Import/Export">
+  Import or export data using your application's tools:
+  
+  ```bash
+  convox run web bundle exec rake data:import
+  convox run worker python scripts/export_reports.py --detach
+  ```
+</Accordion>
+
+<Accordion title="Cache Management">
+  Clear or warm up application caches:
+  
+  ```bash
+  convox run web rake cache:clear
+  convox run web php artisan cache:clear
+  ```
+</Accordion>
+
+## Advanced Options
+
+### Resource Allocation
+
+Allocate specific CPU and memory resources for resource-intensive tasks:
+
+```bash
+convox run web python process_data.py \
+  --cpu 2000 \
+  --memory 4096
+```
+
+<Tip>
+  CPU is specified in millicpu units (1000 = 1 CPU core). Memory is in megabytes.
+</Tip>
+
+### Running Against Specific Releases
+
+Test commands against a specific release before promoting:
+
+```bash
+convox run --release RABCDEFGHIJ web bash
+```
+
+### GPU Support (v3.21.3+)
+
+Run GPU-accelerated workloads:
+
+<CodeGroup>
+```bash Basic GPU Usage
+convox run web python train-model.py --gpu 1
+```
+
+```bash Target GPU Nodes
+convox run web python train-model.py \
+  --gpu 1 \
+  --node-labels "convox.io/label=gpu-nodes"
+```
+
+```bash Combined Resources
+convox run worker python train.py \
+  --gpu 2 \
+  --node-labels "convox.io/label=ml-nodes" \
+  --memory 8192
+```
+</CodeGroup>
+
+### Volume Access (v3.22.3+)
+
+Access service-configured volumes in one-off processes:
+
+```bash
+convox run web sh --use-service-volume
+```
+
+This is useful for:
+- Accessing EFS volumes
+- Debugging volume-mounted data
+- Running maintenance tasks on persistent storage
+- Working with services scaled to zero
+
+**Example with volume inspection:**
+```bash
+$ convox run web ls /data --use-service-volume
+file1.txt
+file2.txt
+shared-config.json
+```
+
+## Executing in Running Processes
+
+The `convox exec` command runs commands inside existing processes, ideal for debugging live containers.
+
+### Find Running Processes
+
+<Steps>
+  <Step title="List all processes">
+    ```bash
+    convox ps
+    ```
+    
+    **Output:**
+    ```
+    ID                    SERVICE  STATUS   RELEASE     STARTED         COMMAND
+    web-6844dc6f45-9wdss  web      running  RABCDEFGHI  14 minutes ago  bin/web
+    web-6844dc6f45-mj9mp  web      running  RABCDEFGHI  14 minutes ago  bin/web
+    ```
+  </Step>
+  
+  <Step title="Execute in a specific process">
+    ```bash
+    convox exec web-6844dc6f45-9wdss bash
+    ```
+  </Step>
+</Steps>
+
+### Quick Access by Service Name
+
+Exec into a random process of a service:
+
+```bash
+convox exec web bash
+```
+
+<Note>
+  This selects a random process from the specified service. Useful when you don't care which specific instance you connect to.
+</Note>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use run for migrations" icon="database">
+    Always use `convox run` for database migrations to ensure they run in a clean environment.
+  </Card>
+  
+  <Card title="Use exec for debugging" icon="bug">
+    Use `convox exec` to inspect running processes without restarting them.
+  </Card>
+  
+  <Card title="Detach long tasks" icon="clock">
+    Use `--detach` for tasks that take more than a few minutes to avoid connection timeouts.
+  </Card>
+  
+  <Card title="Match service resources" icon="gauge">
+    Allocate similar resources to your service configuration to accurately test production behavior.
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### Command Fails to Start
+
+If your command fails immediately:
+
+1. Verify the service name exists:
+   ```bash
+   convox services
+   ```
+
+2. Check if the command exists in your container:
+   ```bash
+   convox run web which bash
+   ```
+
+3. Review application logs:
+   ```bash
+   convox logs --since 5m
+   ```
+
+### Process Times Out
+
+For commands that might exceed the default timeout:
+
+```bash
+convox run web long-running-command --timeout 7200
+```
+
+<Tip>
+  The timeout is specified in seconds. Default is 3600 seconds (1 hour).
+</Tip>
+
+### Cannot Access Volumes
+
+If you can't access expected volumes:
+
+1. Ensure you're using the `--use-service-volume` flag (requires v3.22.3+)
+2. Verify volumes are configured in your `convox.yml`
+3. Check that the service has the volume mounted
+
+## Command Reference
+
+### convox run
+
+```bash
+convox run [options] <service> <command>
+```
+
+**Key Flags:**
+- `--app, -a` - Specify application name
+- `--rack, -r` - Specify rack name
+- `--detach, -d` - Run in background
+- `--release` - Run against specific release
+- `--cpu` - CPU millicores (e.g., 2000 = 2 cores)
+- `--memory` - Memory in MB
+- `--gpu` - Number of GPUs (v3.21.3+)
+- `--use-service-volume` - Mount service volumes (v3.22.3+)
+- `--timeout, -t` - Timeout in seconds
+
+### convox exec
+
+```bash
+convox exec [options] <process-id|service> <command>
+```
+
+**Key Flags:**
+- `--app, -a` - Specify application name
+- `--rack, -r` - Specify rack name
+
+## Related Documentation
+
+- [View Application Logs](/management/logs)
+- [Monitor Process Health](/management/monitoring)
+- [Troubleshooting Guide](/management/troubleshooting)
+- [Process Management CLI Reference](/reference/cli/ps)

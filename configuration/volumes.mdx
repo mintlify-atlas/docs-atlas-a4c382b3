@@ -1,0 +1,420 @@
+---
+title: "Volumes"
+description: "Configure persistent and temporary storage for your services"
+---
+
+# Volumes
+
+Convox supports multiple types of volumes to manage both persistent and temporary data for your applications. These volumes provide flexibility for different use cases, from high-speed temporary data storage to persistent, scalable file storage across multiple services.
+
+## AWS EFS Volumes
+
+AWS EFS (Elastic File System) provides a scalable, persistent storage solution that allows multiple Convox services to access the same file system simultaneously. EFS volumes are useful for applications that require shared access to files and need persistent data storage across services and restarts.
+
+### Supported Access Modes
+
+<CardGroup cols={3}>
+  <Card title="ReadWriteOnce (RWO)" icon="pen">
+    Single-service write operations. Each service has dedicated write access to its own files.
+  </Card>
+  <Card title="ReadOnlyMany (ROM)" icon="book">
+    Multiple-service read operations. Suitable for distributing read-only content like configuration files.
+  </Card>
+  <Card title="ReadWriteMany (RWM)" icon="users">
+    Multi-service read/write operations. Useful for shared file access among multiple services.
+  </Card>
+</CardGroup>
+
+### Enabling AWS EFS Volumes
+
+To use AWS EFS volumes, you must enable the EFS CSI driver on your rack:
+
+```bash
+$ convox rack params set efs_csi_driver_enable=true -r rackName
+Setting parameters... OK
+```
+
+<Warning>
+  Requires rack version 3.18.2 or later. Update your rack before enabling EFS support.
+</Warning>
+
+### Basic Configuration
+
+```yaml
+environment:
+  - PORT=3000
+services:
+  web:
+    build: .
+    port: 3000
+    volumeOptions:
+      - awsEfs:
+          id: "efs-1"
+          accessMode: ReadWriteMany
+          mountPath: "/my/data/"
+      - awsEfs:
+          id: "efs-2"
+          accessMode: ReadOnlyMany
+          mountPath: "/my/read-only/data/"
+```
+
+#### EFS Volume Parameters
+
+<ParamField path="awsEfs.id" type="string" required>
+  The EFS volume ID (unique identifier for this volume)
+</ParamField>
+
+<ParamField path="awsEfs.accessMode" type="string" required>
+  Access mode: `ReadWriteOnce`, `ReadOnlyMany`, or `ReadWriteMany`
+</ParamField>
+
+<ParamField path="awsEfs.mountPath" type="string" required>
+  Defines the mount point for the volume inside the service
+</ParamField>
+
+<ParamField path="awsEfs.storageClass" type="string">
+  (Optional) Custom AWS EFS storage class. Requires rack version 3.19.7+
+</ParamField>
+
+### Advanced Configuration with Storage Classes
+
+Starting from version 3.19.7, you can specify custom storage classes for EFS volumes:
+
+```yaml
+environment:
+  - PORT=3000
+services:
+  web:
+    build: .
+    port: 3000
+    volumeOptions:
+      - awsEfs:
+          id: "data"
+          accessMode: ReadWriteMany
+          mountPath: "/opt/data/"
+          storageClass: "efs-sc-33"
+```
+
+<Note>
+  Storage classes allow you to apply custom storage policies and integrate with your organization's storage management requirements.
+</Note>
+
+### EFS Use Cases
+
+<Tabs>
+  <Tab title="Shared Storage">
+    ```yaml
+    services:
+      web:
+        build: .
+        port: 3000
+        scale:
+          count: 3
+        volumeOptions:
+          - awsEfs:
+              id: "shared-uploads"
+              accessMode: ReadWriteMany
+              mountPath: "/app/uploads"
+      worker:
+        build: .
+        command: bin/worker
+        volumeOptions:
+          - awsEfs:
+              id: "shared-uploads"
+              accessMode: ReadWriteMany
+              mountPath: "/app/uploads"
+    ```
+    Multiple services and instances share the same file storage.
+  </Tab>
+  
+  <Tab title="Content Management">
+    ```yaml
+    services:
+      cms:
+        build: .
+        port: 3000
+        volumeOptions:
+          - awsEfs:
+              id: "content"
+              accessMode: ReadWriteMany
+              mountPath: "/var/www/content"
+      cdn:
+        build: .
+        port: 8080
+        volumeOptions:
+          - awsEfs:
+              id: "content"
+              accessMode: ReadOnlyMany
+              mountPath: "/var/www/content"
+    ```
+    CMS writes content, CDN serves it read-only.
+  </Tab>
+  
+  <Tab title="Data Processing">
+    ```yaml
+    services:
+      processor:
+        build: .
+        scale:
+          count: 5
+        volumeOptions:
+          - awsEfs:
+              id: "processing"
+              accessMode: ReadWriteMany
+              mountPath: "/data/input"
+          - awsEfs:
+              id: "results"
+              accessMode: ReadWriteMany
+              mountPath: "/data/output"
+    ```
+    Distributed data processing across multiple services.
+  </Tab>
+</Tabs>
+
+### Best Practices for EFS
+
+<CardGroup cols={2}>
+  <Card title="Appropriate Access Modes" icon="lock">
+    Use ReadOnlyMany for content distribution, ReadWriteMany only when necessary
+  </Card>
+  <Card title="Path Organization" icon="folder-tree">
+    Organize data with clear directory structures for multiple volumes
+  </Card>
+  <Card title="Performance Monitoring" icon="gauge">
+    Monitor EFS performance metrics for high-throughput workloads
+  </Card>
+  <Card title="Backup Strategy" icon="floppy-disk">
+    Implement backup strategies for critical persistent data
+  </Card>
+</CardGroup>
+
+## emptyDir Volumes
+
+**emptyDir** volumes provide temporary storage within your Convox services. These volumes are initially empty when a service starts and are removed when the service is terminated or rescheduled.
+
+<Warning>
+  emptyDir volumes are ephemeral. Data is lost when the pod is deleted or rescheduled. Use EFS for persistent storage.
+</Warning>
+
+### Basic emptyDir Configuration
+
+```yaml
+environment:
+  - PORT=3000
+services:
+  app:
+    build: .
+    port: 3000
+    volumeOptions:
+      - emptyDir:
+          id: "my-vol1"
+          mountPath: "/data"
+      - emptyDir:
+          id: "my-vol2"
+          mountPath: "/cache"
+          medium: Memory
+```
+
+#### emptyDir Volume Parameters
+
+<ParamField path="emptyDir.id" type="string" required>
+  The identifier for the volume (unique within the service)
+</ParamField>
+
+<ParamField path="emptyDir.mountPath" type="string" required>
+  Specifies where the volume is mounted in the service
+</ParamField>
+
+<ParamField path="emptyDir.medium" type="string" default="">
+  Optional. Set to `Memory` for RAM-based storage (faster but limited by pod memory)
+</ParamField>
+
+### emptyDir Use Cases
+
+<Tabs>
+  <Tab title="Temporary Files">
+    ```yaml
+    services:
+      web:
+        build: .
+        port: 3000
+        volumeOptions:
+          - emptyDir:
+              id: "temp"
+              mountPath: "/tmp/processing"
+    ```
+    Store temporary files during request processing.
+  </Tab>
+  
+  <Tab title="Cache">
+    ```yaml
+    services:
+      api:
+        build: .
+        port: 3000
+        volumeOptions:
+          - emptyDir:
+              id: "cache"
+              mountPath: "/app/cache"
+              medium: Memory
+    ```
+    High-speed in-memory cache for frequently accessed data.
+  </Tab>
+  
+  <Tab title="Scratch Space">
+    ```yaml
+    services:
+      worker:
+        build: .
+        command: bin/worker
+        volumeOptions:
+          - emptyDir:
+              id: "scratch"
+              mountPath: "/workspace"
+    ```
+    Temporary workspace for batch processing jobs.
+  </Tab>
+</Tabs>
+
+### Memory-Backed emptyDir
+
+For high-speed temporary storage, use RAM-backed emptyDir volumes:
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    scale:
+      memory: 2048  # Ensure sufficient memory for volume
+    volumeOptions:
+      - emptyDir:
+          id: "fast-cache"
+          mountPath: "/var/cache"
+          medium: Memory
+```
+
+<Warning>
+  Memory-backed volumes consume pod memory. Ensure your service has sufficient memory allocated (scale.memory) to accommodate the volume.
+</Warning>
+
+## Volume Configuration Examples
+
+### Multiple Volumes
+
+```yaml
+services:
+  app:
+    build: .
+    port: 3000
+    volumeOptions:
+      # Persistent shared storage
+      - awsEfs:
+          id: "uploads"
+          accessMode: ReadWriteMany
+          mountPath: "/app/uploads"
+      # Fast temporary cache
+      - emptyDir:
+          id: "cache"
+          mountPath: "/app/cache"
+          medium: Memory
+      # Temporary processing space
+      - emptyDir:
+          id: "temp"
+          mountPath: "/tmp"
+```
+
+### Init Container with Volumes
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    initContainer:
+      command: "cp -r /app/static/* /shared/static/"
+      volumeOptions:
+        - emptyDir:
+            id: "static"
+            mountPath: "/shared/static"
+    volumeOptions:
+      - emptyDir:
+          id: "static"
+          mountPath: "/app/public"
+```
+
+<Note>
+  Init containers can share volumes with the main container to prepare data before the service starts.
+</Note>
+
+## Version Requirements
+
+<ParamField path="emptyDir volumes" type="string">
+  Rack version 3.16.0+
+</ParamField>
+
+<ParamField path="AWS EFS volumes (basic)" type="string">
+  Rack version 3.18.2+
+</ParamField>
+
+<ParamField path="AWS EFS storage classes" type="string">
+  Rack version 3.19.7+
+</ParamField>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="EFS volume not mounting">
+    Check that:
+    1. EFS CSI driver is enabled: `convox rack params -r rackName | grep efs_csi_driver_enable`
+    2. Rack version is 3.18.2 or later
+    3. Volume ID is correct and EFS exists in AWS
+    4. Access mode is valid: `ReadWriteOnce`, `ReadOnlyMany`, or `ReadWriteMany`
+  </Accordion>
+  
+  <Accordion title="emptyDir volume issues">
+    Common causes:
+    - Volume ID conflicts with another volume
+    - Mount path already in use
+    - Insufficient memory for Memory-backed volumes
+    - Check pod events: `kubectl describe pod -n <namespace>`
+  </Accordion>
+  
+  <Accordion title="Permission denied on mounted volume">
+    Ensure:
+    - Container user has appropriate permissions
+    - For EFS, check AWS security group rules
+    - Volume mount path is accessible within the container
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Choose the Right Volume Type" icon="circle-check">
+    Use EFS for persistent shared storage, emptyDir for temporary data
+  </Card>
+  <Card title="Memory Management" icon="memory">
+    Account for memory-backed volumes in your service memory allocation
+  </Card>
+  <Card title="Access Modes" icon="key">
+    Use the most restrictive access mode that meets your requirements
+  </Card>
+  <Card title="Mount Paths" icon="folder">
+    Use descriptive mount paths that clearly indicate the volume's purpose
+  </Card>
+</CardGroup>
+
+## Related Documentation
+
+<CardGroup cols={3}>
+  <Card title="Service Configuration" icon="server" href="/reference/primitives/app/service">
+    Complete service configuration reference
+  </Card>
+  <Card title="Rack Parameters" icon="sliders" href="/configuration/rack-parameters">
+    Configure rack-level settings
+  </Card>
+  <Card title="Resources" icon="database" href="/reference/primitives/app/resource">
+    Database and resource configuration
+  </Card>
+</CardGroup>

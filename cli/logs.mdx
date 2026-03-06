@@ -1,0 +1,298 @@
+---
+title: logs
+description: Stream and view application logs
+---
+
+The `logs` command streams logs from your application, allowing you to monitor application behavior, debug issues, and track events in real-time.
+
+## Usage
+
+```bash
+convox logs
+```
+
+## Flags
+
+<ParamField path="--app" type="string" default="-a">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string" default="-r">
+  Rack name
+</ParamField>
+
+<ParamField path="--filter" type="string">
+  Filter logs by a specific string
+</ParamField>
+
+<ParamField path="--since" type="string">
+  Show logs since a specific time (e.g., "10m", "1h", "24h")
+</ParamField>
+
+<ParamField path="--no-follow" type="boolean">
+  Print logs and exit instead of streaming
+</ParamField>
+
+<ParamField path="--service" type="string" default="-s">
+  Show logs from a specific service
+</ParamField>
+
+<ParamField path="--tail" type="integer">
+  Number of lines to show (only works with --service)
+</ParamField>
+
+## Examples
+
+### Stream All Logs
+
+Stream logs from all services:
+
+```bash
+$ convox logs
+2020-02-05T12:47:41Z service/web/77f0e67e id=2bdd60aaf431 route=root at=end state=success elapsed=0.065
+2020-02-05T12:47:41Z service/web/77f0e67e id=2bdd60aaf431 route=root at=start method="GET" path="/"
+2020-02-05T12:47:43Z service/web/a81ba08c id=57c9464c88f6 route=root at=end state=success elapsed=0.070
+2020-02-05T12:47:43Z service/worker/c4d3a21b task=send_emails status=complete
+```
+
+### Filter Logs
+
+Show only logs containing a specific string:
+
+```bash
+$ convox logs --filter "error"
+2020-02-05T12:48:15Z service/web/77f0e67e ERROR: Failed to connect to database
+2020-02-05T12:49:22Z service/worker/c4d3a21b ERROR: Job failed with exception
+```
+
+### Time Range
+
+View logs from the last 30 minutes:
+
+```bash
+$ convox logs --since 30m
+2020-02-05T12:47:41Z service/web/77f0e67e id=2bdd60aaf431 route=root at=end
+```
+
+View logs from the last 24 hours:
+
+```bash
+$ convox logs --since 24h
+```
+
+<Note>
+  Valid time units: `s` (seconds), `m` (minutes), `h` (hours)
+</Note>
+
+### Service-Specific Logs
+
+View logs from a specific service:
+
+```bash
+$ convox logs --service web
+2020-02-05T12:47:41Z service/web/77f0e67e ns=template id=2bdd60aaf431 route=root at=end
+2020-02-05T12:47:41Z service/web/77f0e67e ns=template id=2bdd60aaf431 route=root at=start
+```
+
+With tail limit:
+
+```bash
+$ convox logs --service web --tail 100
+```
+
+### Static Logs (No Follow)
+
+Get logs without streaming:
+
+```bash
+$ convox logs --no-follow
+2020-02-05T12:47:41Z service/web/77f0e67e id=2bdd60aaf431 route=root at=end
+2020-02-05T12:47:41Z service/web/77f0e67e id=2bdd60aaf431 route=root at=start
+```
+
+### Combined Filters
+
+Combine multiple filters:
+
+```bash
+$ convox logs --service web --filter "error" --since 1h
+2020-02-05T12:48:15Z service/web/77f0e67e ERROR: Failed to connect to database
+```
+
+## Log Format
+
+Logs are displayed in the following format:
+
+```
+TIMESTAMP service/SERVICE/PROCESS_ID LOG_MESSAGE
+```
+
+Example breakdown:
+
+```bash
+2020-02-05T12:47:41Z service/web/77f0e67e-4886-4aa8-be56-1d19a3aab53b route=root at=start
+│                    │      │   │                                         │
+│                    │      │   └─ Process ID (container)                  └─ Log message
+│                    │      └─ Service name
+│                    └─ Type (service/system)
+└─ ISO 8601 timestamp
+```
+
+## Common Use Cases
+
+### Debug Application Errors
+
+Quickly find and investigate errors:
+
+```bash
+$ convox logs --filter "error" --since 1h --no-follow
+```
+
+### Monitor Specific Request
+
+Track a specific request ID through your application:
+
+```bash
+$ convox logs --filter "request_id=abc123"
+```
+
+### Check Service Health
+
+Monitor logs from a specific service after deployment:
+
+```bash
+$ convox logs --service web --since 5m
+```
+
+### Export Logs
+
+Save logs to a file for analysis:
+
+```bash
+$ convox logs --since 24h --no-follow > logs-$(date +%Y%m%d).txt
+```
+
+### Multiple Terminal Windows
+
+Monitor different services simultaneously:
+
+```bash
+# Terminal 1
+convox logs --service web
+
+# Terminal 2
+convox logs --service worker
+
+# Terminal 3
+convox logs --service api
+```
+
+## Log Aggregation
+
+For production environments, consider integrating with log aggregation services:
+
+- **Datadog**: Application performance monitoring
+- **Papertrail**: Log management and search
+- **Logentries**: Real-time log analysis
+- **CloudWatch**: AWS native logging (for AWS racks)
+
+Configure log forwarding in your rack parameters.
+
+## Best Practices
+
+### 1. Structured Logging
+
+Use structured log formats (JSON) for better filtering:
+
+```javascript
+// Good
+console.log(JSON.stringify({
+  level: 'info',
+  request_id: 'abc123',
+  user_id: 456,
+  action: 'login',
+  duration: 150
+}));
+
+// Output
+{"level":"info","request_id":"abc123","user_id":456,"action":"login","duration":150}
+```
+
+### 2. Log Levels
+
+Use consistent log levels:
+
+- **ERROR**: Application errors requiring attention
+- **WARN**: Warning conditions
+- **INFO**: Informational messages
+- **DEBUG**: Detailed debug information
+
+### 3. Include Context
+
+Add relevant context to logs:
+
+```javascript
+console.log(`[RequestID: ${requestId}] User ${userId} performed ${action}`);
+```
+
+### 4. Avoid Logging Secrets
+
+Never log sensitive information:
+
+```javascript
+// Bad
+console.log('API Key:', apiKey);
+
+// Good
+console.log('API request completed');
+```
+
+## Troubleshooting
+
+### No Logs Appearing
+
+1. Verify the app is running: `convox ps`
+2. Check if the service exists: `convox services`
+3. Ensure your application writes to stdout/stderr
+4. Try without filters: `convox logs --no-follow`
+
+### Too Many Logs
+
+If logs are overwhelming:
+
+1. Use `--service` to focus on one service
+2. Apply `--filter` to narrow results
+3. Reduce log verbosity in your application
+4. Use `--tail` to limit output
+
+### Missing Historical Logs
+
+Convox retains logs for a limited time. For long-term storage:
+
+1. Configure external log aggregation
+2. Regularly export logs to external storage
+3. Use rack-level log forwarding
+
+## Performance Considerations
+
+- Streaming logs has minimal performance impact
+- Using `--no-follow` is faster for one-time queries
+- Filters are applied server-side for efficiency
+- Service-specific logs are more performant than app-wide logs
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="PS" icon="list" href="/cli/ps">
+    View running processes
+  </Card>
+  <Card title="Services" icon="server" href="/cli/services">
+    List application services
+  </Card>
+  <Card title="Deploy" icon="rocket" href="/cli/deploy">
+    Deploy and monitor logs
+  </Card>
+  <Card title="Run" icon="terminal" href="/cli/run">
+    Run commands and see output
+  </Card>
+</CardGroup>

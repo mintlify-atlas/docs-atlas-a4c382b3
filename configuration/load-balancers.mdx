@@ -1,0 +1,424 @@
+---
+title: "Load Balancers"
+description: "Configure HTTP, TCP, and UDP load balancing for your services"
+---
+
+# Load Balancers
+
+Convox provides flexible load balancing options for routing traffic to your services, including automatic HTTPS load balancing and custom TCP/UDP balancers.
+
+## Standard Load Balancer
+
+Each Rack contains a built-in HTTPS load balancer using AWS NLB or GCP Load Balancer based on your cloud provider.
+
+### Basic Configuration
+
+For an app named `myapp` with a `convox.yml` like this:
+
+```yaml
+services:
+  web:
+    port: 3000
+```
+
+Convox will automatically set up HTTPS load balancing to this Service when deployed.
+
+```bash
+$ convox services
+SERVICE  DOMAIN                               PORTS
+web      web.myapp.0a1b2c3d4e5f.convox.cloud  443:3000
+```
+
+<Note>
+  You can access the `web` service using `https://web.myapp.0a1b2c3d4e5f.convox.cloud`
+</Note>
+
+### SSL Termination
+
+Convox automatically configures SSL for external services using certificates from [Let's Encrypt](https://letsencrypt.org/).
+
+<ParamField path="port" type="string | number">
+  Primary port for HTTPS load balancing. Format: `3000` or `https:3000`
+</ParamField>
+
+<Warning>
+  Convox redirects HTTP requests on port 80 to HTTPS on port 443 using an HTTP 301 redirect.
+</Warning>
+
+### Custom SSL Certificates
+
+To use a custom SSL certificate, upload it to your Rack:
+
+```bash
+$ convox certs upload -a myapp cert.pem key.pem
+Uploading certificate... OK
+```
+
+### Custom Domains
+
+For custom domain configuration, see [Custom Domains](/deployment/custom-domains).
+
+## End-to-End Encryption
+
+By default, connections are HTTPS between users and the load balancer, then HTTP between the load balancer and your app.
+
+For end-to-end encryption, configure your app to listen for HTTPS and update your `convox.yml`:
+
+```yaml
+services:
+  web:
+    port: https:3000
+```
+
+<Note>
+  You can use a self-signed certificate between the Rack load balancer and your app.
+</Note>
+
+## Port Configuration
+
+### port vs ports
+
+<Tabs>
+  <Tab title="port">
+    <ParamField path="port" type="string | number">
+      - Defines the main port and protocol for the service
+      - Publicly accessible through the load balancer
+      - Typically uses HTTPS for external traffic
+      - Health checks are performed over this port
+    </ParamField>
+    
+    ```yaml
+    services:
+      web:
+        port: 3000        # HTTP on port 3000
+        # or
+        port: https:3000  # HTTPS on port 3000
+        # or
+        port: grpc:50051  # gRPC on port 50051
+    ```
+  </Tab>
+  
+  <Tab title="ports">
+    <ParamField path="ports" type="array">
+      - Defines additional ports for the service
+      - Used for internal communication within the Rack
+      - Can include TCP or UDP protocols
+      - Not publicly accessible without a custom balancer
+    </ParamField>
+    
+    ```yaml
+    services:
+      web:
+        port: 3000
+        ports:
+          - 5001           # TCP port 5001
+          - 5002/tcp       # TCP port 5002 (explicit)
+          - 5003/udp       # UDP port 5003
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  Ports configured using `ports:` are not publicly accessible. All external connections must go through the load balancer.
+</Warning>
+
+## Custom Load Balancers
+
+If your app needs to expose arbitrary TCP or UDP ports to the outside world, configure custom [Balancers](/reference/primitives/app/balancer).
+
+### TCP Balancer
+
+```yaml
+balancers:
+  custom:
+    service: web
+    ports:
+      5000: 5001
+      6000: 6001
+services:
+  web:
+    port: 3000
+    ports:
+      - 5001
+      - 6001
+```
+
+<Note>
+  The `ports` attribute defines internal ports that are not exposed using the default load balancer.
+</Note>
+
+Convox configures a dedicated load balancer for each entry in the `balancers:` section:
+
+```bash
+$ convox balancers
+BALANCER  SERVICE  ENDPOINT
+custom    web      1.2.3.4
+```
+
+You can then access this service using:
+* `tcp://1.2.3.4:5000` → routes to container port 5001
+* `tcp://1.2.3.4:6000` → routes to container port 6001
+
+<Warning>
+  Convox does not configure SSL termination for ports on custom balancers.
+</Warning>
+
+### UDP Balancer
+
+Convox supports UDP protocols for custom load balancers:
+
+```yaml
+balancers:
+  custom:
+    annotations:
+      - test.annotation.org/foo=bar
+    service: web
+    ports:
+      5000:
+        protocol: UDP
+        port: 3001
+      5001:
+        protocol: UDP
+        port: 3002
+services:
+  web:
+    port: 3000
+    ports:
+      - 3001/udp
+      - 3002/udp
+```
+
+<ParamField path="balancers.<name>.ports.<external>" type="object">
+  Port mapping with protocol specification
+</ParamField>
+
+<ParamField path="balancers.<name>.ports.<external>.protocol" type="string">
+  Protocol type: `TCP` or `UDP`
+</ParamField>
+
+<ParamField path="balancers.<name>.ports.<external>.port" type="number">
+  Internal port on the service
+</ParamField>
+
+<Warning>
+  Custom balancers can only be configured with multiple TCP or multiple UDP ports. You cannot mix TCP and UDP ports on the same balancer.
+</Warning>
+
+## Hybrid Load Balancing
+
+You can combine both standard and custom load balancing on a single service.
+
+```yaml
+balancers:
+  custom:
+    service: web
+    ports:
+      6000: 4000
+      6001: 4001
+services:
+  web:
+    port: 4000
+    ports:
+      - 4001
+```
+
+<CodeGroup>
+```bash Services
+$ convox services
+SERVICE  DOMAIN                               PORTS
+web      web.myapp.0a1b2c3d4e5f.convox.cloud  443:4000
+```
+
+```bash Balancers
+$ convox balancers
+BALANCER  SERVICE  ENDPOINT
+custom    web      1.2.3.4
+```
+</CodeGroup>
+
+You can access the service using:
+* `https://web.myapp.0a1b2c3d4e5f.convox.cloud` (HTTPS with SSL)
+* `http://1.2.3.4:6000` (TCP, no SSL)
+* `tcp://1.2.3.4:6001` (TCP, no SSL)
+
+<Note>
+  Port 4000 on this service is exposed through both the standard and custom load balancers. SSL termination is only provided on the standard balancer.
+</Note>
+
+## Advanced Configuration
+
+### Annotations
+
+Add Kubernetes annotations to custom balancers:
+
+```yaml
+balancers:
+  custom:
+    annotations:
+      - service.beta.kubernetes.io/aws-load-balancer-type=nlb
+      - service.beta.kubernetes.io/aws-load-balancer-internal=true
+    service: web
+    ports:
+      8883: 8883
+```
+
+### Whitelist
+
+Restrict access to specific CIDR ranges:
+
+```yaml
+balancers:
+  custom:
+    service: web
+    ports:
+      4000: 4001
+    whitelist:
+      - 127.0.0.0/24
+      - 10.0.0.0/16
+services:
+  web:
+    ports:
+      - 4001
+    whitelist: 192.168.0.0/16
+```
+
+<ParamField path="whitelist" type="array">
+  List of CIDR ranges to allow inbound traffic
+</ParamField>
+
+### Internal Services
+
+Make a service accessible only inside the Rack:
+
+```yaml
+services:
+  auth:
+    internal: true
+    port: 5000
+  web:
+    port: 3000
+```
+
+```bash
+$ convox services
+SERVICE  DOMAIN                               PORTS
+auth     auth.myapp.convox.local              5000
+web      web.myapp.0a1b2c3d4e5f.convox.cloud  443:3000
+```
+
+<Note>
+  Internal services use `.convox.local` domains and are only accessible within the Rack. See [Service Discovery](/configuration/service-discovery) for inter-service communication.
+</Note>
+
+## Configuration Examples
+
+<Tabs>
+  <Tab title="Simple HTTPS">
+    ```yaml
+    services:
+      web:
+        build: .
+        port: 3000
+        health: /health
+    ```
+  </Tab>
+  
+  <Tab title="End-to-End HTTPS">
+    ```yaml
+    services:
+      web:
+        build: .
+        port: https:3000
+        health: /health
+    ```
+  </Tab>
+  
+  <Tab title="TCP + HTTPS">
+    ```yaml
+    balancers:
+      mqtt:
+        service: web
+        ports:
+          8883: 8883
+    services:
+      web:
+        build: .
+        port: 3000
+        ports:
+          - 8883
+    ```
+  </Tab>
+  
+  <Tab title="UDP">
+    ```yaml
+    balancers:
+      udp:
+        service: web
+        ports:
+          5000:
+            protocol: UDP
+            port: 5000
+    services:
+      web:
+        build: .
+        port: 3000
+        ports:
+          - 5000/udp
+    ```
+  </Tab>
+</Tabs>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use HTTPS" icon="lock">
+    Always use HTTPS for public-facing services to encrypt traffic
+  </Card>
+  <Card title="Health Checks" icon="heart-pulse">
+    Configure health checks on the main `port` for reliable service routing
+  </Card>
+  <Card title="Internal Services" icon="shield">
+    Use `internal: true` for services that should not be publicly accessible
+  </Card>
+  <Card title="Whitelist" icon="list-check">
+    Restrict access to sensitive services using whitelist CIDR ranges
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Service not accessible">
+    Check that:
+    1. Service has a `port` defined in `convox.yml`
+    2. Health check is passing (use `convox ps`)
+    3. DNS has propagated for custom domains
+    4. Firewall/whitelist rules allow your IP
+  </Accordion>
+  
+  <Accordion title="SSL certificate issues">
+    - Let's Encrypt certificates are automatically provisioned
+    - Custom certificates can be uploaded with `convox certs upload`
+    - Check certificate status with `convox certs`
+  </Accordion>
+  
+  <Accordion title="Custom balancer not working">
+    - Ensure `ports` are defined on the service
+    - Verify balancer endpoint with `convox balancers`
+    - Cannot mix TCP and UDP on the same balancer
+  </Accordion>
+</AccordionGroup>
+
+## Related Documentation
+
+<CardGroup cols={3}>
+  <Card title="Service Discovery" icon="network-wired" href="/configuration/service-discovery">
+    Internal service-to-service communication
+  </Card>
+  <Card title="Health Checks" icon="heart-pulse" href="/configuration/health-checks">
+    Configure readiness and liveness probes
+  </Card>
+  <Card title="Custom Domains" icon="globe" href="/deployment/custom-domains">
+    Set up custom domains for your services
+  </Card>
+</CardGroup>

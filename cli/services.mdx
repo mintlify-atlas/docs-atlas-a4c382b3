@@ -1,0 +1,493 @@
+---
+title: services
+description: List and manage application services
+---
+
+The `services` command group provides tools for viewing and managing services defined in your application. Services represent the different components of your application (web servers, workers, APIs, etc.).
+
+## services
+
+List all services for an application.
+
+### Usage
+
+```bash
+convox services
+```
+
+### Flags
+
+<ParamField path="--app" type="string" default="-a">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string" default="-r">
+  Rack name
+</ParamField>
+
+### Example Output
+
+```bash
+$ convox services
+SERVICE  DOMAIN                                                                PORTS
+web      myapp-web.convox-router.us-east-1.convox.site                        80:3000 443:3000
+api      myapp-api.convox-router.us-east-1.convox.site                        80:8080 443:8080
+worker                                                                         
+```
+
+### Understanding the Output
+
+<ParamField path="SERVICE" type="string">
+  Service name from your convox.yml
+</ParamField>
+
+<ParamField path="DOMAIN" type="string">
+  Public domain for the service (if exposed via load balancer)
+</ParamField>
+
+<ParamField path="PORTS" type="string">
+  Port mappings in format `external:internal`
+</ParamField>
+
+## services restart
+
+Restart all processes for a service.
+
+### Usage
+
+```bash
+convox services restart <service>
+```
+
+### Arguments
+
+<ParamField path="service" type="string" required>
+  Name of the service to restart
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string" default="-a">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string" default="-r">
+  Rack name
+</ParamField>
+
+### Example
+
+```bash
+$ convox services restart web
+Restarting web... OK
+```
+
+<Note>
+  Restarting a service performs a rolling restart, ensuring zero downtime. Old processes continue serving traffic until new ones are healthy.
+</Note>
+
+## Service Configuration
+
+Services are defined in your `convox.yml` file:
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    scale:
+      count: 2
+      cpu: 256
+      memory: 512
+  
+  api:
+    build: ./api
+    port: 8080
+    domain: api.example.com
+    scale:
+      count: 3
+      cpu: 512
+      memory: 1024
+  
+  worker:
+    build: .
+    command: npm run worker
+    scale:
+      count: 1
+      cpu: 1024
+      memory: 2048
+```
+
+## Common Use Cases
+
+### Check Service Status
+
+View all services and their domains:
+
+```bash
+$ convox services
+SERVICE  DOMAIN                                    PORTS
+web      myapp-web.rack.convox.cloud              80:3000 443:3000
+api      api.example.com                          80:8080 443:8080
+worker   
+```
+
+### Identify Exposed Services
+
+Services with domains are publicly accessible:
+
+```bash
+$ convox services
+SERVICE  DOMAIN                                    PORTS
+web      myapp-web.rack.convox.cloud              80:3000 443:3000  # Public
+worker                                                               # Internal
+```
+
+### Restart After Configuration Changes
+
+Restart a service after updating environment variables:
+
+```bash
+# Update environment
+$ convox env set API_KEY=new_value
+
+# Promote release
+$ convox releases promote RABCDEFGHI
+
+# Or restart to pick up changes immediately
+$ convox services restart web
+```
+
+### Restart Unresponsive Service
+
+If a service becomes unresponsive:
+
+```bash
+# Check service health
+$ convox ps
+ID            SERVICE  STATUS
+abc123        web      running
+def456        web      unhealthy  # Problem!
+
+# Restart the service
+$ convox services restart web
+Restarting web... OK
+
+# Verify recovery
+$ convox ps
+ID            SERVICE  STATUS
+ghi789        web      running
+jkl012        web      running
+```
+
+### Clear Application Cache
+
+Restart to clear in-memory cache:
+
+```bash
+$ convox services restart web
+Restarting web... OK
+```
+
+## Service Types
+
+### Web Services
+
+HTTP/HTTPS services with load balancers:
+
+```yaml
+services:
+  web:
+    port: 3000
+    domain: www.example.com
+```
+
+```bash
+$ convox services
+SERVICE  DOMAIN              PORTS
+web      www.example.com     80:3000 443:3000
+```
+
+### Internal Services
+
+Services without external access:
+
+```yaml
+services:
+  worker:
+    command: npm run worker
+    # No port or domain
+```
+
+```bash
+$ convox services
+SERVICE  DOMAIN  PORTS
+worker           
+```
+
+### API Services
+
+Services with custom domains:
+
+```yaml
+services:
+  api:
+    port: 8080
+    domain: api.example.com
+```
+
+```bash
+$ convox services
+SERVICE  DOMAIN              PORTS
+api      api.example.com     80:8080 443:8080
+```
+
+### Background Workers
+
+Long-running background processes:
+
+```yaml
+services:
+  worker:
+    command: bin/process_jobs
+  
+  scheduler:
+    command: bin/scheduler
+```
+
+## Port Mapping
+
+The PORTS column shows how external and internal ports are mapped:
+
+```bash
+PORTS
+80:3000 443:3000
+│   │    │    │
+│   │    │    └─ Container port (HTTPS)
+│   │    └─ Load balancer port (HTTPS)
+│   └─ Container port (HTTP)
+└─ Load balancer port (HTTP)
+```
+
+### Common Port Mappings
+
+- `80:3000 443:3000` - HTTP/HTTPS to port 3000
+- `80:8080 443:8080` - HTTP/HTTPS to port 8080  
+- `5432:5432` - Direct PostgreSQL access
+- `6379:6379` - Direct Redis access
+
+## Service Domains
+
+### Default Domains
+
+Convox automatically assigns default domains:
+
+```bash
+SERVICE  DOMAIN
+web      myapp-web.rack-name.convox.cloud
+```
+
+### Custom Domains
+
+Set custom domains in `convox.yml`:
+
+```yaml
+services:
+  web:
+    domain: www.example.com
+  
+  api:
+    domain: api.example.com
+```
+
+```bash
+$ convox services
+SERVICE  DOMAIN
+web      www.example.com
+api      api.example.com
+```
+
+<Note>
+  After adding custom domains, update your DNS to point to the Convox load balancer.
+</Note>
+
+## Monitoring Services
+
+### Check Service Health
+
+```bash
+# List services
+$ convox services
+
+# Check running processes
+$ convox ps
+
+# View service logs
+$ convox logs --service web
+```
+
+### Monitor Service Metrics
+
+View metrics in the Convox Console:
+- Request rates
+- Response times
+- Error rates
+- Resource utilization
+
+## Troubleshooting
+
+### Service Not Listed
+
+If a service doesn't appear:
+
+1. Check `convox.yml` syntax:
+   ```yaml
+   services:
+     web:  # Correct
+       port: 3000
+   ```
+
+2. Verify the app is deployed:
+   ```bash
+   convox releases
+   ```
+
+3. Check for deployment errors:
+   ```bash
+   convox logs
+   ```
+
+### Domain Not Showing
+
+If a domain doesn't appear:
+
+1. Verify `port` is set in `convox.yml`:
+   ```yaml
+   services:
+     web:
+       port: 3000  # Required for domain
+   ```
+
+2. Redeploy if you just added the port:
+   ```bash
+   convox deploy
+   ```
+
+3. Check service configuration:
+   ```bash
+   convox services
+   ```
+
+### Restart Not Working
+
+If restart seems to have no effect:
+
+1. Verify service name is correct:
+   ```bash
+   convox services  # Check exact service name
+   ```
+
+2. Check for deployment in progress:
+   ```bash
+   convox apps info
+   ```
+
+3. View logs for errors:
+   ```bash
+   convox logs --service web
+   ```
+
+4. Check process status:
+   ```bash
+   convox ps
+   ```
+
+## Best Practices
+
+### 1. Name Services Clearly
+
+Use descriptive service names:
+
+```yaml
+services:
+  web:        # Main web server
+  api:        # REST API
+  worker:     # Background jobs
+  scheduler:  # Cron jobs
+```
+
+### 2. Separate Concerns
+
+Create separate services for different functions:
+
+```yaml
+services:
+  web:
+    port: 3000
+  
+  worker:
+    command: npm run worker
+  
+  scheduler:
+    command: npm run scheduler
+```
+
+### 3. Monitor Service Health
+
+Regularly check service status:
+
+```bash
+# Daily health check
+convox services
+convox ps
+convox logs --service web --since 1h | grep ERROR
+```
+
+### 4. Use Health Checks
+
+Define health checks in `convox.yml`:
+
+```yaml
+services:
+  web:
+    health:
+      path: /health
+      interval: 5
+      timeout: 3
+      threshold:
+        healthy: 2
+        unhealthy: 2
+```
+
+### 5. Document Custom Domains
+
+Keep track of domain mappings:
+
+```yaml
+services:
+  web:
+    domain: www.example.com      # Main website
+  
+  api:
+    domain: api.example.com      # Public API
+  
+  admin:
+    domain: admin.example.com    # Admin panel
+```
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="PS" icon="list" href="/cli/ps">
+    View service processes
+  </Card>
+  <Card title="Scale" icon="chart-line" href="/cli/scale">
+    Scale service resources
+  </Card>
+  <Card title="Logs" icon="scroll" href="/cli/logs">
+    View service logs
+  </Card>
+  <Card title="Deploy" icon="rocket" href="/cli/deploy">
+    Deploy service changes
+  </Card>
+</CardGroup>

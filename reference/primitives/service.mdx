@@ -1,0 +1,302 @@
+---
+title: "Service"
+description: "Horizontally-scalable collection of durable processes"
+---
+
+A Service is a horizontally-scalable collection of durable [Processes](/reference/primitives/process).
+
+Processes that belong to a Service are automatically restarted upon termination. Services can be scaled to a static count or autoscaled in a range based on metrics.
+
+## Definition
+
+### Basic Service
+
+```yaml
+services:
+  web:
+    build: .
+    health: /check
+    port: 5000
+    scale: 3
+```
+
+### gRPC Service
+
+```yaml
+services:
+  grpc:
+    build: .
+    port: grpc:5551
+    grpcHealthEnabled: true
+```
+
+### Complete Service Configuration
+
+```yaml
+services:
+  web:
+    agent: false
+    annotations:
+      - test.annotation.org/value=foobar
+    build:
+      manifest: Dockerfile
+      path: .
+    certificate:
+      duration: 2160h
+    command: bin/web
+    deployment:
+      minimum: 25
+      maximum: 100
+    domain: ${WEB_HOST}
+    drain: 10
+    dnsConfig:
+      ndots: 5
+    environment:
+      - FOO
+      - BAR=qux
+    health:
+      grace: 10
+      interval: 5
+      path: /check
+      timeout: 3
+    liveness:
+      path: /liveness/check
+      grace: 15
+      interval: 5
+      timeout: 3
+      successThreshold: 1
+      failureThreshold: 3
+    internal: false
+    ingressAnnotations:
+      - nginx.ingress.kubernetes.io/limit-rpm=10
+    labels:
+      convox.com/test: true
+    lifecycle:
+      preStop: "sleep 10"
+      postStart: "sleep 10"
+    port: 5000
+    ports:
+      - 5001
+      - 5002
+    privileged: false
+    scale:
+      count: 1-3
+      limit:
+        cpu: 256
+        memory: 1024
+      cpu: 128
+      memory: 512
+      targets:
+        cpu: 50
+        memory: 80
+        external:
+          - name: "datadogmetric@default:web-requests"
+            averageValue: 200
+    singleton: false
+    sticky: true
+    termination:
+      grace: 45
+    test: make test
+    timeout: 180
+    tls:
+      redirect: true
+    whitelist: 10.0.0.128/16,192.168.0.1/32
+```
+
+## Attributes
+
+<ParamField path="agent" type="boolean" default="false">
+  Set to `true` to declare this Service as an [Agent](/configuration/agents)
+</ParamField>
+
+<ParamField path="annotations" type="list">
+  A list of annotation keys and values to populate the metadata for the deployed pods and their serviceaccounts
+</ParamField>
+
+<ParamField path="accessControl" type="map">
+  Specification of the pod access control management. Currently only IAM using AWS pod identity is supported
+</ParamField>
+
+<ParamField path="build" type="string | map" default=".">
+  Build definition. Can be a string path or a map with `manifest` and `path` keys
+</ParamField>
+
+<ParamField path="certificate" type="map">
+  Define certificate parameters including `duration` and `id`
+</ParamField>
+
+<ParamField path="command" type="string">
+  The command to run to start a Process for this Service. Defaults to CMD of Dockerfile
+</ParamField>
+
+<ParamField path="deployment" type="map">
+  Manual control over deployment parameters with `minimum` and `maximum` percentages
+</ParamField>
+
+<ParamField path="domain" type="string">
+  A custom domain(s) (comma separated) to route to this Service
+</ParamField>
+
+<ParamField path="drain" type="number">
+  The number of seconds to wait for connections to drain when terminating a Process (v2 racks only)
+</ParamField>
+
+<ParamField path="environment" type="list">
+  A list of environment variables (with optional defaults) to populate from the Release environment
+</ParamField>
+
+<ParamField path="grpcHealthEnabled" type="boolean" default="false">
+  Enables liveliness health check for grpc following the [grpc health protocol](https://github.com/grpc/grpc/blob/master/doc/health-checking.md)
+</ParamField>
+
+<ParamField path="health" type="string | map" default="/">
+  Health check definition. String sets path, map allows configuring `grace`, `interval`, `path`, `timeout`, `disable`
+</ParamField>
+
+<ParamField path="liveness" type="map">
+  Liveness check definition with `path`, `grace`, `interval`, `timeout`, `successThreshold`, `failureThreshold`. Disabled by default
+</ParamField>
+
+<ParamField path="image" type="string">
+  An external Docker image to use for this Service (supercedes build)
+</ParamField>
+
+<ParamField path="internal" type="boolean" default="false">
+  Set to `true` to make this Service only accessible inside the Rack
+</ParamField>
+
+<ParamField path="port" type="string">
+  The port that the default Rack balancer will use to route incoming traffic. For grpc specify: `grpc:5051`
+</ParamField>
+
+<ParamField path="ports" type="list">
+  A list of ports available for internal service discovery or custom Balancers
+</ParamField>
+
+<ParamField path="privileged" type="boolean" default="true">
+  Set to `false` to prevent Processes of this Service from running as root inside their container
+</ParamField>
+
+<ParamField path="scale" type="number | map" default="1">
+  Define scaling parameters including `count`, `cpu`, `memory`, `targets`, `limit`
+</ParamField>
+
+<ParamField path="singleton" type="boolean" default="false">
+  Set to `true` to prevent extra Processes of this Service from being started during deployments
+</ParamField>
+
+<ParamField path="sticky" type="boolean" default="false">
+  Set to `true` to enable sticky sessions
+</ParamField>
+
+<ParamField path="termination" type="map">
+  Termination related configuration with `grace` period in seconds (default 30)
+</ParamField>
+
+<ParamField path="test" type="string">
+  A command to run to test this Service when running `convox test`
+</ParamField>
+
+<ParamField path="timeout" type="number" default="60">
+  Timeout period (in seconds) for reading/writing requests to/from your service
+</ParamField>
+
+<ParamField path="tls" type="map">
+  TLS-related configuration with `redirect` boolean (default true)
+</ParamField>
+
+<ParamField path="whitelist" type="string">
+  Comma delimited list of CIDRs to allow access to the service
+</ParamField>
+
+## Scaling Configuration
+
+### Basic Scaling
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    scale:
+      count: 3
+      cpu: 256
+      memory: 512
+```
+
+### Autoscaling
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    scale:
+      count: 1-10
+      cpu: 256
+      memory: 512
+      targets:
+        cpu: 70
+        memory: 80
+```
+
+### External Metrics Autoscaling
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    scale:
+      count: 1-3
+      targets:
+        external:
+          - name: "datadogmetric@default:web-requests"
+            averageValue: 200
+```
+
+## AWS Pod Identity
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    accessControl:
+      awsPodIdentity:
+        policyArns:
+          - "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+          - "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+```
+
+<Note>
+Pod identity must be enabled on rack before using this feature.
+</Note>
+
+## Command Line Interface
+
+### Listing Services
+
+```bash
+$ convox services -a myapp
+SERVICE  DOMAIN                                PORTS
+web      web.convox.0a1b2c3d4e5f.convox.cloud  443:5000
+```
+
+### Scaling a Service
+
+```bash
+$ convox scale web --count 3 --cpu 256 --memory 1024 -a myapp
+Scaling web... OK
+```
+
+### Restarting a Service
+
+```bash
+$ convox services restart web -a myapp
+Restarting web... OK
+```
+
+<Note>
+Restarting a Service will begin a rolling restart with graceful termination of each Process of the Service.
+</Note>

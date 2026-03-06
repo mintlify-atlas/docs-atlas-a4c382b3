@@ -1,0 +1,45 @@
+---
+title: "Object"
+description: "Blob storage for large files and infrequently changed data"
+---
+
+An Object contains a single blob of data referenced by a slash-separated path.
+
+An Object is used for storing large files or data that is infrequently changed.
+
+## Overview
+
+Objects provide a simple key-value storage mechanism for binary data (blobs) that doesn't fit well in traditional databases or configuration. This is ideal for:
+
+- Large binary files (images, videos, archives)
+- Static assets
+- Backups and exports
+- Documents and media files
+- Any data that is read more often than it is written
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="File Uploads" icon="upload">
+    Store user-uploaded files like profile pictures, documents, or media
+  </Card>
+  <Card title="Static Assets" icon="image">
+    Host images, CSS, JavaScript, and other static content
+  </Card>
+  <Card title="Backups" icon="floppy-disk">
+    Archive database dumps and application backups
+  </Card>
+  <Card title="Generated Content" icon="file">
+    Store reports, exports, and dynamically generated files
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<Note>
+- Use objects for large files that don't change frequently
+- Consider using a CDN in front of object storage for frequently accessed content
+- Implement proper access controls and permissions
+- Use versioning for critical data
+- Set up lifecycle policies to manage storage costs
+</Note>

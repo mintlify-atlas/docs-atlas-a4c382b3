@@ -1,0 +1,473 @@
+---
+title: "S3"
+description: "AWS S3 object storage for your Convox applications"
+---
+
+## Overview
+
+Amazon S3 (Simple Storage Service) provides scalable object storage for files, backups, static assets, and media. While Convox doesn't provision S3 buckets automatically, you can easily connect your application to S3 buckets using resource overlays.
+
+## Setup Method
+
+S3 buckets are connected to Convox applications via resource overlays - manually setting environment variables that contain S3 credentials and configuration.
+
+## Creating an S3 Bucket
+
+Create an S3 bucket using the AWS CLI, Console, or Infrastructure as Code:
+
+<Tabs>
+  <Tab title="AWS CLI">
+    ```bash
+    # Create bucket
+    aws s3 mb s3://my-app-uploads --region us-east-1
+    
+    # Enable versioning (recommended)
+    aws s3api put-bucket-versioning \
+      --bucket my-app-uploads \
+      --versioning-configuration Status=Enabled
+    
+    # Enable encryption (recommended)
+    aws s3api put-bucket-encryption \
+      --bucket my-app-uploads \
+      --server-side-encryption-configuration '{
+        "Rules": [{
+          "ApplyServerSideEncryptionByDefault": {
+            "SSEAlgorithm": "AES256"
+          }
+        }]
+      }'
+    ```
+  </Tab>
+  <Tab title="Terraform">
+    ```hcl
+    resource "aws_s3_bucket" "uploads" {
+      bucket = "my-app-uploads"
+    }
+    
+    resource "aws_s3_bucket_versioning" "uploads" {
+      bucket = aws_s3_bucket.uploads.id
+      versioning_configuration {
+        status = "Enabled"
+      }
+    }
+    
+    resource "aws_s3_bucket_server_side_encryption_configuration" "uploads" {
+      bucket = aws_s3_bucket.uploads.id
+      rule {
+        apply_server_side_encryption_by_default {
+          sse_algorithm = "AES256"
+        }
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## IAM Permissions
+
+Create an IAM user or role with S3 access:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::my-app-uploads",
+        "arn:aws:s3:::my-app-uploads/*"
+      ]
+    }
+  ]
+}
+```
+
+<Note>
+For production, use IAM roles when running on AWS (via IRSA for EKS) instead of static credentials.
+</Note>
+
+## Connecting to Convox
+
+Define a placeholder resource in `convox.yml`:
+
+```yaml
+resources:
+  uploads:
+    type: s3
+
+services:
+  web:
+    resources:
+      - uploads
+```
+
+<Warning>
+The `s3` resource type is not natively supported by Convox. This is a placeholder that you'll override with environment variables.
+</Warning>
+
+Set the environment variables using resource overlays:
+
+```bash
+convox env set \
+  UPLOADS_BUCKET=my-app-uploads \
+  UPLOADS_REGION=us-east-1 \
+  UPLOADS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE \
+  UPLOADS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY \
+  -a myapp -r production
+```
+
+## Environment Variables
+
+Your application will have access to these environment variables:
+
+<ParamField path="RESOURCE_BUCKET" type="string" required>
+  The S3 bucket name
+</ParamField>
+
+<ParamField path="RESOURCE_REGION" type="string" required>
+  The AWS region where the bucket is located
+</ParamField>
+
+<ParamField path="RESOURCE_ACCESS_KEY_ID" type="string">
+  AWS access key ID (not needed if using IAM roles)
+</ParamField>
+
+<ParamField path="RESOURCE_SECRET_ACCESS_KEY" type="string">
+  AWS secret access key (not needed if using IAM roles)
+</ParamField>
+
+### Example
+
+For a resource named `uploads`:
+
+```bash
+UPLOADS_BUCKET=my-app-uploads
+UPLOADS_REGION=us-east-1
+UPLOADS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+UPLOADS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+```
+
+## Usage Examples
+
+<Tabs>
+  <Tab title="Node.js">
+    ```javascript
+    const AWS = require('aws-sdk');
+    
+    const s3 = new AWS.S3({
+      accessKeyId: process.env.UPLOADS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.UPLOADS_SECRET_ACCESS_KEY,
+      region: process.env.UPLOADS_REGION
+    });
+    
+    // Upload a file
+    async function uploadFile(fileBuffer, key) {
+      const params = {
+        Bucket: process.env.UPLOADS_BUCKET,
+        Key: key,
+        Body: fileBuffer,
+        ContentType: 'image/jpeg'
+      };
+      
+      return await s3.upload(params).promise();
+    }
+    
+    // Get a file
+    async function getFile(key) {
+      const params = {
+        Bucket: process.env.UPLOADS_BUCKET,
+        Key: key
+      };
+      
+      return await s3.getObject(params).promise();
+    }
+    
+    // Generate presigned URL
+    function getPresignedUrl(key, expiresIn = 3600) {
+      return s3.getSignedUrl('getObject', {
+        Bucket: process.env.UPLOADS_BUCKET,
+        Key: key,
+        Expires: expiresIn
+      });
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import boto3
+    import os
+    
+    s3 = boto3.client(
+        's3',
+        aws_access_key_id=os.environ['UPLOADS_ACCESS_KEY_ID'],
+        aws_secret_access_key=os.environ['UPLOADS_SECRET_ACCESS_KEY'],
+        region_name=os.environ['UPLOADS_REGION']
+    )
+    
+    bucket = os.environ['UPLOADS_BUCKET']
+    
+    # Upload a file
+    def upload_file(file_content, key):
+        s3.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=file_content,
+            ContentType='image/jpeg'
+        )
+    
+    # Get a file
+    def get_file(key):
+        response = s3.get_object(Bucket=bucket, Key=key)
+        return response['Body'].read()
+    
+    # Generate presigned URL
+    def get_presigned_url(key, expires_in=3600):
+        return s3.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': bucket, 'Key': key},
+            ExpiresIn=expires_in
+        )
+    ```
+  </Tab>
+  <Tab title="Ruby">
+    ```ruby
+    require 'aws-sdk-s3'
+    
+    s3 = Aws::S3::Client.new(
+      access_key_id: ENV['UPLOADS_ACCESS_KEY_ID'],
+      secret_access_key: ENV['UPLOADS_SECRET_ACCESS_KEY'],
+      region: ENV['UPLOADS_REGION']
+    )
+    
+    bucket = ENV['UPLOADS_BUCKET']
+    
+    # Upload a file
+    def upload_file(file_content, key)
+      s3.put_object(
+        bucket: bucket,
+        key: key,
+        body: file_content,
+        content_type: 'image/jpeg'
+      )
+    end
+    
+    # Get a file
+    def get_file(key)
+      s3.get_object(bucket: bucket, key: key).body.read
+    end
+    
+    # Generate presigned URL
+    def get_presigned_url(key, expires_in: 3600)
+      signer = Aws::S3::Presigner.new(client: s3)
+      signer.presigned_url(:get_object, bucket: bucket, key: key, expires_in: expires_in)
+    end
+    ```
+  </Tab>
+  <Tab title="Go">
+    ```go
+    package main
+    
+    import (
+        "os"
+        "time"
+        "github.com/aws/aws-sdk-go/aws"
+        "github.com/aws/aws-sdk-go/aws/credentials"
+        "github.com/aws/aws-sdk-go/aws/session"
+        "github.com/aws/aws-sdk-go/service/s3"
+    )
+    
+    func main() {
+        sess := session.Must(session.NewSession(&aws.Config{
+            Region: aws.String(os.Getenv("UPLOADS_REGION")),
+            Credentials: credentials.NewStaticCredentials(
+                os.Getenv("UPLOADS_ACCESS_KEY_ID"),
+                os.Getenv("UPLOADS_SECRET_ACCESS_KEY"),
+                "",
+            ),
+        }))
+        
+        svc := s3.New(sess)
+        bucket := os.Getenv("UPLOADS_BUCKET")
+        
+        // Upload file
+        // svc.PutObject(&s3.PutObjectInput{...})
+        
+        // Get presigned URL
+        req, _ := svc.GetObjectRequest(&s3.GetObjectInput{
+            Bucket: aws.String(bucket),
+            Key:    aws.String("myfile.jpg"),
+        })
+        url, _ := req.Presign(15 * time.Minute)
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use IAM Roles" icon="user-shield">
+    When running on AWS, use IAM roles (IRSA for EKS) instead of static credentials for better security.
+  </Card>
+  <Card title="Enable Versioning" icon="clock-rotate-left">
+    Turn on versioning to protect against accidental deletions and maintain file history.
+  </Card>
+  <Card title="Enable Encryption" icon="lock">
+    Use server-side encryption (SSE-S3 or SSE-KMS) to encrypt data at rest.
+  </Card>
+  <Card title="Use Lifecycle Policies" icon="recycle">
+    Configure lifecycle rules to automatically archive or delete old objects and reduce costs.
+  </Card>
+  <Card title="Use Presigned URLs" icon="link">
+    Generate presigned URLs for secure, time-limited access to private objects.
+  </Card>
+  <Card title="Enable Access Logging" icon="file-lines">
+    Turn on S3 access logging to audit and monitor bucket access.
+  </Card>
+</CardGroup>
+
+## Common Use Cases
+
+<CardGroup cols={2}>
+  <Card title="User Uploads" icon="cloud-arrow-up">
+    Store user-generated content like profile pictures, documents, and media files.
+  </Card>
+  <Card title="Static Assets" icon="images">
+    Serve static assets (CSS, JS, images) via CloudFront CDN backed by S3.
+  </Card>
+  <Card title="Backups" icon="floppy-disk">
+    Store database backups, application logs, and disaster recovery snapshots.
+  </Card>
+  <Card title="Data Lake" icon="database">
+    Build a data lake for analytics with large-scale data storage.
+  </Card>
+</CardGroup>
+
+## Security Considerations
+
+### Bucket Policies
+
+Restrict public access:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::my-app-uploads",
+        "arn:aws:s3:::my-app-uploads/*"
+      ],
+      "Condition": {
+        "Bool": {
+          "aws:SecureTransport": "false"
+        }
+      }
+    }
+  ]
+}
+```
+
+This policy enforces HTTPS for all requests.
+
+### Block Public Access
+
+Enable block public access settings:
+
+```bash
+aws s3api put-public-access-block \
+  --bucket my-app-uploads \
+  --public-access-block-configuration \
+    "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+```
+
+<Warning>
+Never commit AWS credentials to version control. Always use environment variables or IAM roles.
+</Warning>
+
+## Cost Optimization
+
+<CardGroup cols={2}>
+  <Card title="Use Intelligent-Tiering" icon="layer-group">
+    Automatically move objects between access tiers based on usage patterns.
+  </Card>
+  <Card title="Configure Lifecycle Rules" icon="arrow-right-arrow-left">
+    Transition older objects to cheaper storage classes (Glacier, Deep Archive).
+  </Card>
+  <Card title="Enable Compression" icon="file-zipper">
+    Compress files before uploading to reduce storage and transfer costs.
+  </Card>
+  <Card title="Use CloudFront" icon="globe">
+    Reduce S3 GET request costs by serving content through CloudFront CDN.
+  </Card>
+</CardGroup>
+
+## Example Configurations
+
+<Tabs>
+  <Tab title="Basic">
+    ```yaml
+    # convox.yml
+    resources:
+      uploads:
+        type: s3
+    
+    services:
+      web:
+        resources:
+          - uploads
+    ```
+    
+    ```bash
+    # Set environment variables
+    convox env set \
+      UPLOADS_BUCKET=my-app-uploads \
+      UPLOADS_REGION=us-east-1 \
+      UPLOADS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+      UPLOADS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+      -a myapp
+    ```
+  </Tab>
+  <Tab title="Multiple Buckets">
+    ```yaml
+    # convox.yml
+    resources:
+      uploads:
+        type: s3
+      backups:
+        type: s3
+    
+    services:
+      web:
+        resources:
+          - uploads
+      worker:
+        resources:
+          - uploads
+          - backups
+    ```
+    
+    ```bash
+    # Set environment variables for both buckets
+    convox env set \
+      UPLOADS_BUCKET=my-app-uploads \
+      UPLOADS_REGION=us-east-1 \
+      BACKUPS_BUCKET=my-app-backups \
+      BACKUPS_REGION=us-east-1 \
+      UPLOADS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+      UPLOADS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+      BACKUPS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+      BACKUPS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+      -a myapp
+    ```
+  </Tab>
+</Tabs>

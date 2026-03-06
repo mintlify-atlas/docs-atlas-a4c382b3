@@ -1,0 +1,485 @@
+---
+title: "Monitoring & Observability"
+description: "Monitor your Convox applications with metrics, dashboards, and intelligent alerting"
+---
+
+# Monitoring & Observability
+
+Convox provides comprehensive monitoring capabilities built directly into the platform, giving you visibility into your applications and infrastructure without additional tools or complex configuration.
+
+## Overview
+
+Convox Monitoring offers integrated observability:
+
+<CardGroup cols={3}>
+  <Card title="Automatic Collection" icon="chart-line">
+    Metrics automatically collected from racks and applications
+  </Card>
+  
+  <Card title="Pre-built Dashboards" icon="grid">
+    Essential infrastructure metrics available immediately
+  </Card>
+  
+  <Card title="Smart Alerting" icon="bell">
+    Configurable alerts with notification integrations
+  </Card>
+</CardGroup>
+
+## Enabling Metrics
+
+Metrics collection is enabled at the rack level through the Convox Console.
+
+<Steps>
+  <Step title="Navigate to Rack Settings">
+    In the Convox Console, select your rack and click **Rack Settings** in the sidebar.
+  </Step>
+  
+  <Step title="Enable Metrics Agent">
+    Scroll to **Dashboard Settings** and toggle **Enable Metrics Agent** to on.
+  </Step>
+  
+  <Step title="Wait for initialization">
+    The metrics agent installs automatically and begins collecting data within 2-3 minutes.
+  </Step>
+</Steps>
+
+<Note>
+  Once enabled, the Metrics Agent runs continuously and has minimal impact on application performance.
+</Note>
+
+## Default Dashboards
+
+When you enable metrics, Convox automatically creates comprehensive monitoring panels:
+
+### Infrastructure Metrics
+
+<Accordion title="Rack CPU Usage">
+  **What it shows:** Overall CPU utilization across all nodes in your rack
+  
+  **Use cases:**
+  - Identify when to scale infrastructure
+  - Detect CPU-intensive workloads
+  - Plan capacity requirements
+  
+  **Typical values:** 20-70% is healthy; consistently above 80% suggests scaling needed
+</Accordion>
+
+<Accordion title="Rack Memory Usage">
+  **What it shows:** Memory consumption patterns across your rack
+  
+  **Use cases:**
+  - Detect memory leaks
+  - Right-size node types
+  - Plan application resource limits
+  
+  **Typical values:** 40-75% is normal; consistently above 85% indicates memory pressure
+</Accordion>
+
+<Accordion title="Rack Network I/O">
+  **What it shows:** Network throughput and activity
+  
+  **Use cases:**
+  - Monitor traffic patterns
+  - Identify bandwidth bottlenecks
+  - Detect unusual network activity
+</Accordion>
+
+<Accordion title="Rack Network Errors">
+  **What it shows:** Network error rates and packet loss
+  
+  **Use cases:**
+  - Identify connectivity issues
+  - Detect misconfigurations
+  - Monitor service reliability
+  
+  **Typical values:** Should be near zero; spikes indicate problems
+</Accordion>
+
+### Application Metrics
+
+<Accordion title="Application Pod Count">
+  **What it shows:** Number of running instances per application
+  
+  **Use cases:**
+  - Verify scaling behavior
+  - Monitor deployment progress
+  - Track resource allocation
+</Accordion>
+
+<Accordion title="Application Pod Ready %">
+  **What it shows:** Percentage of healthy pods passing health checks
+  
+  **Use cases:**
+  - Monitor application health
+  - Detect deployment issues
+  - Track rollout progress
+  
+  **Target value:** Should be 100% under normal conditions
+</Accordion>
+
+## Custom Panels
+
+Create custom monitoring panels to track application-specific metrics.
+
+### Creating a Panel
+
+<Steps>
+  <Step title="Navigate to V3 Dashboard">
+    In the Convox Console, go to **Metrics** > **V3 Dashboard**.
+  </Step>
+  
+  <Step title="Click Create Panel">
+    Configure your panel with:
+    - **Name:** Descriptive title (e.g., "API Response Times")
+    - **Description:** Optional details about what the panel tracks
+    - **Chart Type:** Automatically set for Smart Queries
+  </Step>
+  
+  <Step title="Add queries">
+    Use Smart Queries for easy configuration or PromQL for advanced needs.
+  </Step>
+  
+  <Step title="Preview and save">
+    Click **Generate Preview** to verify, then **Create Panel** to save.
+  </Step>
+</Steps>
+
+### Smart Queries
+
+Smart Queries provide pre-configured metric selection:
+
+<CodeGroup>
+```text CPU Trend
+Rack: production
+App: myapp
+Service: web
+Metric: CPU Usage Trend
+```
+
+```text Memory Monitoring
+Rack: production
+App: All Apps
+Service: All Services
+Metric: Memory Usage Trend
+```
+
+```text Network Performance
+Rack: production
+App: api-service
+Service: web
+Metric: Network I/O patterns
+```
+</CodeGroup>
+
+**Available Smart Query Metrics:**
+- CPU Usage Trend
+- Memory Usage Trend
+- Network I/O patterns
+- Request rates and response times
+- Pod health and readiness
+
+<Tip>
+  Start with Smart Queries for quick setup, then use custom PromQL queries for advanced monitoring needs.
+</Tip>
+
+### Custom PromQL Queries
+
+For advanced monitoring, write custom Prometheus queries:
+
+```promql
+# Average response time for web service
+rate(http_request_duration_seconds_sum{service="web"}[5m])
+/ rate(http_request_duration_seconds_count{service="web"}[5m])
+```
+
+```promql
+# Request rate by status code
+sum by (status_code) (rate(http_requests_total[5m]))
+```
+
+```promql
+# Memory usage percentage
+100 * (container_memory_usage_bytes / container_memory_limit_bytes)
+```
+
+## Alerting
+
+Set up intelligent alerts to be notified when metrics exceed thresholds.
+
+### Creating Alert Rules
+
+<Steps>
+  <Step title="Open Alert Manager">
+    Navigate to **Metrics** > **Alert Manager** in the Convox Console.
+  </Step>
+  
+  <Step title="Configure basic settings">
+    - **Rule Name:** Descriptive name (e.g., "High CPU Alert")
+    - **Severity:** Warning, Critical, or custom level
+    - **Panel:** Select the monitoring panel
+    - **Query:** Choose which query to monitor
+  </Step>
+  
+  <Step title="Set conditions">
+    - **Condition:** Greater than, less than, etc.
+    - **Threshold:** Value that triggers the alert
+    - **For Seconds:** Duration before triggering
+    - **Keep Firing For:** How long to keep alert active
+  </Step>
+  
+  <Step title="Add documentation">
+    - **Summary:** Brief description for notifications
+    - **Description:** Detailed troubleshooting info
+    - **Labels:** Key-value pairs for routing
+  </Step>
+</Steps>
+
+### Example Alert Configurations
+
+<Accordion title="High CPU Usage">
+  ```yaml
+  Rule Name: Production CPU High
+  Severity: Warning
+  Condition: Greater than
+  Threshold: 80
+  For Seconds: 300
+  Keep Firing For: 600
+  Summary: Production CPU usage above 80% for 5 minutes
+  Description: Check for runaway processes or scale up infrastructure
+  Labels: env=production, team=platform
+  ```
+</Accordion>
+
+<Accordion title="Low Pod Health">
+  ```yaml
+  Rule Name: Pod Health Below Threshold
+  Severity: Critical
+  Condition: Less than
+  Threshold: 90
+  For Seconds: 120
+  Keep Firing For: 300
+  Summary: Less than 90% of pods are healthy
+  Description: Check deployment status and pod logs for errors
+  Labels: env=production, team=backend
+  ```
+</Accordion>
+
+<Accordion title="Memory Pressure">
+  ```yaml
+  Rule Name: Memory Usage Critical
+  Severity: Critical
+  Condition: Greater than
+  Threshold: 90
+  For Seconds: 180
+  Keep Firing For: 600
+  Summary: Rack memory usage critically high
+  Description: Investigate memory leaks or scale infrastructure
+  Labels: env=production, team=sre
+  ```
+</Accordion>
+
+<Warning>
+  Set `For Seconds` high enough to avoid alert noise from temporary spikes. Start with 300 seconds (5 minutes) and adjust based on your needs.
+</Warning>
+
+## Notification Integrations
+
+Receive alerts where your team works.
+
+### Slack Integration
+
+<Steps>
+  <Step title="Navigate to Integrations">
+    Go to the **Integrations** page in the Convox Console.
+  </Step>
+  
+  <Step title="Select Slack">
+    Choose Slack from the available integrations.
+  </Step>
+  
+  <Step title="Configure webhook">
+    Create a Slack webhook in your workspace and paste the URL.
+  </Step>
+  
+  <Step title="Test integration">
+    Send a test alert to verify configuration.
+  </Step>
+</Steps>
+
+### Discord Integration
+
+Similar setup process for Discord:
+
+1. Create a Discord webhook in your server
+2. Add the webhook URL in Convox integrations
+3. Configure channel and notification preferences
+4. Test the integration
+
+### PagerDuty (Coming Soon)
+
+PagerDuty integration will provide:
+- Incident escalation
+- On-call scheduling
+- Incident management workflow
+
+## Process Monitoring
+
+### List Running Processes
+
+View all running processes for your application:
+
+```bash
+convox ps -a myapp
+```
+
+**Output:**
+```
+ID                    SERVICE  STATUS   RELEASE     STARTED         COMMAND
+web-6844dc6f45-9wdss  web      running  RABCDEFGHI  14 minutes ago  bin/web
+web-6844dc6f45-mj9mp  web      running  RABCDEFGHI  14 minutes ago  bin/web
+worker-7a5c8e2f1b-x4k web      running  RABCDEFGHI  14 minutes ago  bin/worker
+```
+
+### Watch Process Status
+
+Continuously monitor process status:
+
+```bash
+convox ps -a myapp --watch
+```
+
+<Tip>
+  Use `--watch` during deployments to monitor pod rollouts in real-time.
+</Tip>
+
+### Get Process Details
+
+View detailed information about a specific process:
+
+```bash
+convox ps info web-6844dc6f45-9wdss -a myapp
+```
+
+**Output:**
+```
+Id        web-6844dc6f45-9wdss
+App       myapp
+Command   bin/web
+Instance  i-0cbaa6d2dd1d094c0
+Release   RABCDEFGHI
+Service   web
+Started   14 minutes ago
+Status    running
+```
+
+## Service Health
+
+Monitor service endpoints and load balancers:
+
+```bash
+convox services -a myapp
+```
+
+**Output:**
+```
+SERVICE  DOMAIN                                          PORTS
+web      myapp-web.us-east-1.convox.site                 80:3000 443:3000
+api      myapp-api.us-east-1.convox.site                 80:8080 443:8080
+```
+
+### Restart Services
+
+Restart all processes of a service:
+
+```bash
+convox services restart web -a myapp
+```
+
+<Note>
+  Service restarts perform a rolling restart, maintaining availability during the process.
+</Note>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Start with Defaults" icon="gauge">
+    Use default panels to understand baseline performance before creating custom metrics.
+  </Card>
+  
+  <Card title="Meaningful Names" icon="tag">
+    Use descriptive names for panels and alerts that clearly indicate what they monitor.
+  </Card>
+  
+  <Card title="Avoid Alert Fatigue" icon="volume-xmark">
+    Set thresholds that indicate real problems, not normal fluctuations.
+  </Card>
+  
+  <Card title="Document Runbooks" icon="book">
+    Include troubleshooting steps in alert descriptions for faster incident response.
+  </Card>
+  
+  <Card title="Use Labels" icon="tags">
+    Apply consistent labels for alert routing and organization.
+  </Card>
+  
+  <Card title="Test Alerts" icon="vial">
+    Regularly test notification integrations to ensure they work when needed.
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### Metrics Not Appearing
+
+<Steps>
+  <Step title="Verify Metrics Agent is enabled">
+    Check Rack Settings to confirm the agent is turned on.
+  </Step>
+  
+  <Step title="Wait for initialization">
+    Allow 2-3 minutes for agents to install and begin collecting data.
+  </Step>
+  
+  <Step title="Check application status">
+    Ensure applications are running:
+    ```bash
+    convox ps -a myapp
+    ```
+  </Step>
+  
+  <Step title="Verify rack version">
+    Some metrics features require recent rack versions:
+    ```bash
+    convox rack
+    ```
+  </Step>
+</Steps>
+
+### Alerts Not Firing
+
+If alerts aren't triggering when expected:
+
+1. **Verify conditions:** Check threshold and timing settings
+2. **Test query:** Preview the panel to see current values
+3. **Check "For Seconds":** May be set too high
+4. **Verify notifications:** Test integration connections
+
+### Panel Shows No Data
+
+<Warning>
+  Panels require metric data to be available. If you just enabled metrics, it may take a few minutes for data to populate.
+</Warning>
+
+If panels remain empty:
+
+1. Verify the selected rack has metrics enabled
+2. Check if the service/app exists and is running
+3. Ensure the query is valid (preview it)
+4. Try a different time range
+
+## Related Documentation
+
+- [View Application Logs](/management/logs)
+- [Run One-Off Commands](/management/run)
+- [Troubleshooting Guide](/management/troubleshooting)
+- [Health Checks Configuration](/configuration/health-checks)

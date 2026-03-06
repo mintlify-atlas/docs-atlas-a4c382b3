@@ -1,0 +1,406 @@
+---
+title: "PostgreSQL"
+description: "PostgreSQL database resources for your Convox applications"
+---
+
+## Overview
+
+PostgreSQL is a powerful, open-source relational database. Convox supports both containerized PostgreSQL and AWS RDS-managed instances.
+
+## Basic Configuration
+
+Define a PostgreSQL resource in `convox.yml`:
+
+```yaml
+resources:
+  database:
+    type: postgres
+
+services:
+  web:
+    resources:
+      - database
+```
+
+## Containerized PostgreSQL
+
+For development and staging environments, use containerized PostgreSQL:
+
+```yaml
+resources:
+  database:
+    type: postgres
+    options:
+      version: "13"
+      storage: 10
+```
+
+### Options
+
+<ParamField path="version" type="string" default="13">
+  PostgreSQL version to use
+</ParamField>
+
+<ParamField path="storage" type="integer" default="10">
+  Storage size in GB
+</ParamField>
+
+<ParamField path="image" type="string">
+  Custom Docker image (overrides version)
+</ParamField>
+
+### Custom Images
+
+Use custom PostgreSQL images like pgvector:
+
+```yaml
+resources:
+  database:
+    type: postgres
+    image: pgvector/pgvector:pg16
+```
+
+<Note>
+The `image` field takes precedence over `version`. Always include an image tag.
+</Note>
+
+## AWS RDS PostgreSQL
+
+For production workloads, use AWS RDS for enhanced durability and managed operations:
+
+```yaml
+resources:
+  database:
+    type: rds-postgres
+    options:
+      class: db.t3.micro
+      storage: 20
+      version: "13"
+      deletionProtection: true
+      durable: true
+      encrypted: true
+      backupRetentionPeriod: 7
+```
+
+### Configuration Options
+
+<ParamField path="class" type="string" default="db.t3.micro">
+  The compute and memory capacity of the DB instance. Common values:
+  - `db.t3.micro` - 2 vCPU, 1 GiB RAM
+  - `db.t3.small` - 2 vCPU, 2 GiB RAM
+  - `db.m5.large` - 2 vCPU, 8 GiB RAM
+  - `db.m5.xlarge` - 4 vCPU, 16 GiB RAM
+</ParamField>
+
+<ParamField path="storage" type="integer" default="20">
+  Storage size in GB (minimum 20 for RDS)
+</ParamField>
+
+<ParamField path="version" type="string" default="13">
+  PostgreSQL engine version (e.g., 13, 14, 15, 16)
+</ParamField>
+
+<ParamField path="encrypted" type="boolean" default="false">
+  Enable storage encryption at rest
+</ParamField>
+
+<ParamField path="deletionProtection" type="boolean" default="false">
+  Prevent accidental deletion of the database
+</ParamField>
+
+<ParamField path="durable" type="boolean" default="false">
+  Create a Multi-AZ deployment for high availability
+</ParamField>
+
+<ParamField path="backupRetentionPeriod" type="integer" default="1">
+  Number of days to retain automated backups (0 to disable, 1-35 days)
+</ParamField>
+
+<ParamField path="preferredBackupWindow" type="string" default="AWS managed">
+  Daily backup window in UTC (format: `hh24:mi-hh24:mi`, min 30 minutes)
+</ParamField>
+
+<ParamField path="preferredMaintenanceWindow" type="string" default="AWS managed">
+  Weekly maintenance window in UTC (format: `ddd:hh24:mi-ddd:hh24:mi`)
+</ParamField>
+
+<ParamField path="port" type="integer" default="5432">
+  Database port number
+</ParamField>
+
+<ParamField path="iops" type="integer" default="AWS managed">
+  Provisioned IOPS for storage performance
+</ParamField>
+
+<ParamField path="masterUserPassword" type="string" default="Convox managed">
+  Master password (use environment variable, not hardcoded)
+</ParamField>
+
+<ParamField path="allowMajorVersionUpgrade" type="boolean" default="true">
+  Allow major version upgrades during maintenance
+</ParamField>
+
+<ParamField path="autoMinorVersionUpgrade" type="boolean" default="true">
+  Automatically apply minor version patches
+</ParamField>
+
+## Advanced Features
+
+### Read Replicas
+
+Create read replicas to scale read operations:
+
+```yaml
+resources:
+  database:
+    type: rds-postgres
+    options:
+      storage: 100
+      class: db.t3.large
+      version: "13"
+  
+  database-replica:
+    type: rds-postgres
+    options:
+      readSourceDB: "#convox.resources.database"
+
+services:
+  web:
+    resources:
+      - database
+      - database-replica
+```
+
+<ParamField path="readSourceDB" type="string">
+  Source database identifier for creating a read replica. Use `#convox.resources.<resource-name>` syntax.
+</ParamField>
+
+<Note>
+Read replicas inherit storage type, encryption, and engine version from the source database.
+</Note>
+
+**Promoting a Replica**
+
+To promote a read replica to a standalone database, remove the `readSourceDB` option and redeploy.
+
+### Database Import
+
+Import existing RDS databases into Convox:
+
+```yaml
+resources:
+  imported-db:
+    type: rds-postgres
+    options:
+      import: existing-rds-instance-identifier
+      masterUserPassword: ${DB_PASSWORD}
+
+services:
+  web:
+    resources:
+      - imported-db
+```
+
+<ParamField path="import" type="string">
+  RDS instance identifier to import
+</ParamField>
+
+<Warning>
+When importing, you must provide the correct `masterUserPassword`. While `import` is set, the database is read-only from Convox's perspective. Remove `import` to allow Convox to manage the database.
+</Warning>
+
+Set the password before deploying:
+
+```bash
+convox env set DB_PASSWORD=your-secure-password -a myapp
+```
+
+### Snapshot Restoration
+
+Restore a database from a snapshot:
+
+```yaml
+resources:
+  restored-db:
+    type: rds-postgres
+    options:
+      snapshot: my-snapshot-identifier
+      version: "13"
+      storage: 100
+
+services:
+  web:
+    resources:
+      - restored-db
+```
+
+<ParamField path="snapshot" type="string">
+  RDS snapshot identifier to restore from
+</ParamField>
+
+<Note>
+The `version` must match the snapshot's engine version. Storage encryption and volume size are inherited from the snapshot.
+</Note>
+
+Remove the `snapshot` option after restoration to enable full management.
+
+## Environment Variables
+
+When linked to a service, PostgreSQL resources inject these environment variables:
+
+```bash
+DATABASE_URL=postgres://username:password@host.name:5432/database
+DATABASE_USER=username
+DATABASE_PASS=password
+DATABASE_HOST=host.name
+DATABASE_PORT=5432
+DATABASE_NAME=database
+```
+
+## CLI Operations
+
+### List Resources
+
+```bash
+$ convox resources -a myapp
+NAME      TYPE          URL
+database  rds-postgres  postgres://username:password@host.name:5432/database
+```
+
+### Get Resource Information
+
+```bash
+$ convox resources info database -a myapp
+Name  database
+Type  rds-postgres
+URL   postgres://username:password@host.name:5432/database
+```
+
+### Open PostgreSQL Console
+
+```bash
+$ convox resources console database -a myapp
+psql (13.3)
+Type "help" for help.
+
+database=#
+```
+
+### Proxy to Database
+
+Create a local tunnel to the database:
+
+```bash
+$ convox resources proxy database -a myapp
+Proxying localhost:5432 to host.name:5432
+```
+
+Connect using local tools:
+
+```bash
+psql postgres://localhost:5432/database
+```
+
+### Export Database
+
+```bash
+$ convox resources export database -f /tmp/backup.sql -a myapp
+Exporting data from database... OK
+```
+
+### Import Database
+
+```bash
+$ convox resources import database -f /tmp/backup.sql -a myapp
+Importing data to database... OK
+```
+
+## Production Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Enable Deletion Protection" icon="shield-check">
+    Always set `deletionProtection: true` for production databases to prevent accidental deletion.
+  </Card>
+  <Card title="Use Multi-AZ" icon="server">
+    Enable `durable: true` for automatic failover and high availability.
+  </Card>
+  <Card title="Enable Encryption" icon="lock">
+    Set `encrypted: true` to encrypt data at rest and meet compliance requirements.
+  </Card>
+  <Card title="Configure Backups" icon="clock">
+    Set appropriate `backupRetentionPeriod` and `preferredBackupWindow` for your recovery needs.
+  </Card>
+</CardGroup>
+
+<Warning>
+If an application is deleted, it will delete its RDS databases unless they have `deletionProtection: true` enabled. Imported databases are never deleted.
+</Warning>
+
+## Example Configurations
+
+<Tabs>
+  <Tab title="Development">
+    ```yaml
+    resources:
+      database:
+        type: postgres
+        options:
+          version: "15"
+          storage: 10
+    
+    services:
+      web:
+        resources:
+          - database
+    ```
+  </Tab>
+  <Tab title="Staging">
+    ```yaml
+    resources:
+      database:
+        type: rds-postgres
+        options:
+          class: db.t3.small
+          storage: 50
+          version: "15"
+          encrypted: true
+          backupRetentionPeriod: 3
+    
+    services:
+      web:
+        resources:
+          - database
+    ```
+  </Tab>
+  <Tab title="Production">
+    ```yaml
+    resources:
+      database:
+        type: rds-postgres
+        options:
+          class: db.m5.large
+          storage: 200
+          version: "15"
+          deletionProtection: true
+          durable: true
+          encrypted: true
+          backupRetentionPeriod: 30
+          preferredBackupWindow: "03:00-04:00"
+          preferredMaintenanceWindow: "sun:04:00-sun:05:00"
+      
+      database-replica:
+        type: rds-postgres
+        options:
+          readSourceDB: "#convox.resources.database"
+    
+    services:
+      web:
+        resources:
+          - database
+      api:
+        resources:
+          - database
+          - database-replica
+    ```
+  </Tab>
+</Tabs>

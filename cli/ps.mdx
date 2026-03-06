@@ -1,0 +1,455 @@
+---
+title: ps
+description: List and manage application processes
+---
+
+The `ps` command group allows you to view and manage running processes for your applications. You can list all processes, get detailed information about specific processes, and stop processes when needed.
+
+## ps
+
+List all running processes for an application.
+
+### Usage
+
+```bash
+convox ps
+```
+
+### Flags
+
+<ParamField path="--app" type="string" default="-a">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string" default="-r">
+  Rack name
+</ParamField>
+
+<ParamField path="--service" type="string">
+  Filter by service name
+</ParamField>
+
+### Example Output
+
+```bash
+$ convox ps
+ID            SERVICE  STATUS   RELEASE      STARTED     COMMAND
+62942430327e  web      running  RCRLBREFPBX  1 week ago
+a81ba08c6dbe  web      running  RCRLBREFPBX  1 week ago
+c4d3a21b5f3e  worker   running  RCRLBREFPBX  1 week ago
+```
+
+The output shows:
+- **ID**: Unique identifier for the process
+- **SERVICE**: Service name from convox.yml
+- **STATUS**: Process status (running, pending, stopped)
+- **RELEASE**: Release ID the process is running
+- **STARTED**: When the process started
+- **COMMAND**: Command override if specified
+
+## ps info
+
+Get detailed information about a specific process.
+
+### Usage
+
+```bash
+convox ps info <id>
+```
+
+### Arguments
+
+<ParamField path="id" type="string" required>
+  Process ID (can be shortened, e.g., "629424" instead of full ID)
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string" default="-a">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string" default="-r">
+  Rack name
+</ParamField>
+
+### Example Output
+
+```bash
+$ convox ps info 62942430327e
+Id        62942430327e
+App       nodejs
+Command   
+Instance  i-0cbaa6d2dd1d094c0
+Release   RCRLBREFPBX
+Service   web
+Started   1 week ago
+Status    running
+```
+
+### Information Fields
+
+<ParamField path="Id" type="string">
+  Unique process identifier
+</ParamField>
+
+<ParamField path="App" type="string">
+  Application name
+</ParamField>
+
+<ParamField path="Command" type="string">
+  Custom command if overridden
+</ParamField>
+
+<ParamField path="Instance" type="string">
+  Underlying instance ID (EC2 instance, Kubernetes node)
+</ParamField>
+
+<ParamField path="Release" type="string">
+  Release ID the process is running
+</ParamField>
+
+<ParamField path="Service" type="string">
+  Service name
+</ParamField>
+
+<ParamField path="Started" type="string">
+  When the process started
+</ParamField>
+
+<ParamField path="Status" type="string">
+  Current status (running, pending, stopped, failed)
+</ParamField>
+
+## ps stop
+
+Stop a running process.
+
+### Usage
+
+```bash
+convox ps stop <id>
+```
+
+### Arguments
+
+<ParamField path="id" type="string" required>
+  Process ID to stop
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string" default="-a">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string" default="-r">
+  Rack name
+</ParamField>
+
+### Example
+
+```bash
+$ convox ps stop 62942430327e
+Stopping 62942430327e... OK
+```
+
+<Note>
+  When you stop a process, Convox will automatically start a replacement process to maintain the desired count for that service. To reduce the number of processes, use `convox scale` instead.
+</Note>
+
+## Common Use Cases
+
+### Monitor Process Health
+
+Check if all processes are running:
+
+```bash
+$ convox ps
+ID            SERVICE  STATUS   RELEASE      STARTED
+62942430327e  web      running  RCRLBREFPBX  1 week ago
+a81ba08c6dbe  web      running  RCRLBREFPBX  1 week ago
+c4d3a21b5f3e  worker   running  RCRLBREFPBX  1 week ago
+```
+
+### Identify Problem Processes
+
+Find failed or stuck processes:
+
+```bash
+$ convox ps | grep -v running
+ID            SERVICE  STATUS  RELEASE      STARTED
+e5f6g7h8i9j0  web      failed  RCRLBREFPBX  5 minutes ago
+```
+
+### Force Process Restart
+
+Stop a problematic process (Convox will start a replacement):
+
+```bash
+# Get process ID
+$ convox ps
+ID            SERVICE  STATUS   RELEASE
+62942430327e  web      running  RCRLBREFPBX
+
+# Stop the process
+$ convox ps stop 62942430327e
+Stopping 62942430327e... OK
+
+# Verify new process started
+$ convox ps
+ID            SERVICE  STATUS   RELEASE
+k1l2m3n4o5p6  web      running  RCRLBREFPBX  # New process
+```
+
+### Check Process Distribution
+
+See which instances are running processes:
+
+```bash
+$ convox ps
+ID            SERVICE  STATUS   INSTANCE
+62942430327e  web      running  i-0cbaa6d2dd1d094c0
+a81ba08c6dbe  web      running  i-0f3e2d1c0b9a8f7e
+c4d3a21b5f3e  worker   running  i-0cbaa6d2dd1d094c0
+```
+
+### Verify Deployment
+
+After deploying, confirm all processes are on the new release:
+
+```bash
+$ convox ps
+ID            SERVICE  STATUS   RELEASE
+62942430327e  web      running  RNEWRELEASE  # New release
+a81ba08c6dbe  web      running  RNEWRELEASE  # New release
+c4d3a21b5f3e  worker   running  ROLDRELEASE  # Still old, rolling
+```
+
+## Process Lifecycle
+
+### Process States
+
+<Tabs>
+  <Tab title="Running">
+    Process is healthy and actively running
+    ```bash
+    STATUS: running
+    ```
+  </Tab>
+  <Tab title="Pending">
+    Process is starting up or being scheduled
+    ```bash
+    STATUS: pending
+    ```
+  </Tab>
+  <Tab title="Stopped">
+    Process has been stopped
+    ```bash
+    STATUS: stopped
+    ```
+  </Tab>
+  <Tab title="Failed">
+    Process failed to start or crashed
+    ```bash
+    STATUS: failed
+    ```
+  </Tab>
+</Tabs>
+
+### Rolling Deployments
+
+During deployment, processes are replaced gradually:
+
+```bash
+# Before deployment
+$ convox ps
+ID     SERVICE  RELEASE
+aaa    web      ROLD
+bbb    web      ROLD
+
+# During deployment
+$ convox ps
+ID     SERVICE  RELEASE      STATUS
+aaa    web      ROLD         running
+bbb    web      ROLD         running
+ccc    web      RNEW         pending
+
+# After first new process is healthy
+$ convox ps
+ID     SERVICE  RELEASE      STATUS
+aaa    web      ROLD         running
+ccc    web      RNEW         running
+ddd    web      RNEW         pending
+
+# Fully deployed
+$ convox ps
+ID     SERVICE  RELEASE
+ccc    web      RNEW
+ddd    web      RNEW
+```
+
+## Troubleshooting
+
+### Process Constantly Restarting
+
+If processes keep restarting:
+
+1. Check logs for errors:
+   ```bash
+   convox logs --service web
+   ```
+
+2. Verify health checks in convox.yml:
+   ```yaml
+   services:
+     web:
+       health:
+         path: /health
+         interval: 5
+         timeout: 3
+   ```
+
+3. Check resource limits:
+   ```bash
+   convox scale web --cpu 512 --memory 1024
+   ```
+
+### Process Stuck in Pending
+
+If a process is stuck in pending state:
+
+1. Check if there are enough resources:
+   ```bash
+   convox rack ps
+   ```
+
+2. Verify image can be pulled:
+   ```bash
+   convox logs --service web
+   ```
+
+3. Check rack capacity:
+   ```bash
+   convox rack scale --count 3
+   ```
+
+### Process ID Not Found
+
+If you get "process not found":
+
+1. List all processes to verify ID:
+   ```bash
+   convox ps
+   ```
+
+2. Process may have already been replaced
+
+3. Check you're using the correct app:
+   ```bash
+   convox ps --app myapp
+   ```
+
+## Watch Mode
+
+Continuously monitor processes:
+
+```bash
+$ watch -n 1 'convox ps'
+
+# Or using the built-in watch interval
+$ convox ps --watch
+```
+
+## Filtering and Searching
+
+### By Service
+
+```bash
+# Show only web processes
+$ convox ps | grep web
+
+# Or use the service flag
+$ convox ps --service web
+```
+
+### By Status
+
+```bash
+# Show only running processes
+$ convox ps | grep running
+
+# Show failed processes
+$ convox ps | grep failed
+```
+
+### Count Processes
+
+```bash
+# Count total processes
+$ convox ps | tail -n +2 | wc -l
+
+# Count processes per service
+$ convox ps | grep web | wc -l
+```
+
+## Best Practices
+
+### 1. Regular Health Checks
+
+Monitor process health regularly:
+
+```bash
+# Add to monitoring script
+if convox ps | grep -q failed; then
+  echo "Failed processes detected!"
+  convox ps | grep failed
+fi
+```
+
+### 2. Automated Alerts
+
+Set up alerts for process failures:
+
+```bash
+#!/bin/bash
+FAILED=$(convox ps | grep failed | wc -l)
+if [ $FAILED -gt 0 ]; then
+  # Send alert
+  echo "$FAILED processes failed" | mail -s "Alert" ops@example.com
+fi
+```
+
+### 3. Track Process Age
+
+Identify old processes that may need restart:
+
+```bash
+$ convox ps | grep "weeks\|months"
+```
+
+### 4. Document Process IDs
+
+When investigating issues, save process information:
+
+```bash
+$ convox ps > processes-$(date +%Y%m%d-%H%M%S).txt
+$ convox ps info abc123 >> processes-$(date +%Y%m%d-%H%M%S).txt
+```
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="Scale" icon="chart-line" href="/cli/scale">
+    Adjust process count and resources
+  </Card>
+  <Card title="Logs" icon="scroll" href="/cli/logs">
+    View process logs
+  </Card>
+  <Card title="Services" icon="server" href="/cli/services">
+    Manage services
+  </Card>
+  <Card title="Run" icon="terminal" href="/cli/run">
+    Run one-off processes
+  </Card>
+</CardGroup>

@@ -1,0 +1,372 @@
+---
+title: "Redis"
+description: "Redis cache resources for your Convox applications"
+---
+
+## Overview
+
+Redis is an in-memory data structure store used as a database, cache, and message broker. Convox supports both containerized Redis and AWS ElastiCache-managed instances.
+
+## Basic Configuration
+
+Define a Redis resource in `convox.yml`:
+
+```yaml
+resources:
+  cache:
+    type: redis
+
+services:
+  web:
+    resources:
+      - cache
+```
+
+## Containerized Redis
+
+For development and staging environments, use containerized Redis:
+
+```yaml
+resources:
+  cache:
+    type: redis
+```
+
+### Custom Images
+
+Use custom Redis images:
+
+```yaml
+resources:
+  cache:
+    type: redis
+    image: redis:7-alpine
+```
+
+<Note>
+The `image` field allows you to use any compatible Redis image. Always include an image tag.
+</Note>
+
+## AWS ElastiCache Redis
+
+For production workloads, use AWS ElastiCache for enhanced durability, high availability, and managed operations:
+
+```yaml
+resources:
+  cache:
+    type: elasticache-redis
+    options:
+      class: cache.t3.micro
+      version: "6.2"
+      deletionProtection: true
+      durable: true
+      encrypted: true
+```
+
+### Configuration Options
+
+<ParamField path="class" type="string" required>
+  The compute and memory capacity of the cache node. Common values:
+  - `cache.t3.micro` - 0.5 GiB memory
+  - `cache.t3.small` - 1.37 GiB memory
+  - `cache.t3.medium` - 3.09 GiB memory
+  - `cache.m5.large` - 6.38 GiB memory
+  - `cache.r5.large` - 13.07 GiB memory (memory-optimized)
+</ParamField>
+
+<ParamField path="version" type="string" required>
+  Redis engine version (e.g., 6.2, 7.0, 7.1)
+</ParamField>
+
+<ParamField path="deletionProtection" type="boolean" default="false">
+  Prevent accidental deletion of the cache cluster. This is a Convox-managed feature that prevents resource removal even if deleted from `convox.yml`.
+</ParamField>
+
+<ParamField path="durable" type="boolean" default="false">
+  Create a Multi-AZ deployment with automatic failover for high availability
+</ParamField>
+
+<ParamField path="encrypted" type="boolean" default="false">
+  Enable encryption at rest for data stored on disk
+</ParamField>
+
+<ParamField path="transitEncryption" type="boolean" default="false">
+  Enable in-transit encryption (TLS) for data flowing between your application and Redis
+</ParamField>
+
+<ParamField path="autoMinorVersionUpgrade" type="boolean" default="true">
+  Automatically apply minor engine version patches during maintenance windows
+</ParamField>
+
+<ParamField path="import" type="string">
+  ElastiCache replication group ID to import an existing cluster
+</ParamField>
+
+<Warning>
+`deletionProtection` is a Convox feature, not an AWS feature. It prevents the resource from being deleted if removed from `convox.yml`.
+</Warning>
+
+## Advanced Features
+
+### Import Existing ElastiCache
+
+Import an existing AWS ElastiCache Redis cluster:
+
+```yaml
+resources:
+  imported-cache:
+    type: elasticache-redis
+    options:
+      import: my-existing-redis-cluster
+
+services:
+  web:
+    resources:
+      - imported-cache
+```
+
+<ParamField path="import" type="string">
+  The replication group ID of the existing ElastiCache Redis cluster
+</ParamField>
+
+<Note>
+While `import` is set, the cache cluster is read-only from Convox's perspective. Remove `import` to allow Convox to manage the cluster configuration.
+</Note>
+
+### High Availability Configuration
+
+For production workloads, enable Multi-AZ with automatic failover:
+
+```yaml
+resources:
+  cache:
+    type: elasticache-redis
+    options:
+      class: cache.m5.large
+      version: "7.0"
+      durable: true
+      encrypted: true
+      transitEncryption: true
+      deletionProtection: true
+```
+
+### Encryption Configuration
+
+Enable both at-rest and in-transit encryption:
+
+```yaml
+resources:
+  cache:
+    type: elasticache-redis
+    options:
+      class: cache.t3.medium
+      version: "6.2"
+      encrypted: true
+      transitEncryption: true
+```
+
+<Note>
+When `transitEncryption` is enabled, your Redis connection URL will use `rediss://` (Redis with TLS) instead of `redis://`.
+</Note>
+
+## Environment Variables
+
+When linked to a service, Redis resources inject these environment variables:
+
+```bash
+CACHE_URL=redis://hostname:6379
+CACHE_HOST=hostname
+CACHE_PORT=6379
+```
+
+For ElastiCache with transit encryption enabled:
+
+```bash
+CACHE_URL=rediss://hostname:6379
+```
+
+## CLI Operations
+
+### List Resources
+
+```bash
+$ convox resources -a myapp
+NAME   TYPE               URL
+cache  elasticache-redis  redis://hostname:6379
+```
+
+### Get Resource Information
+
+```bash
+$ convox resources info cache -a myapp
+Name  cache
+Type  elasticache-redis
+URL   redis://hostname:6379
+```
+
+### Proxy to Redis
+
+Create a local tunnel to the Redis instance:
+
+```bash
+$ convox resources proxy cache -a myapp
+Proxying localhost:6379 to hostname:6379
+```
+
+Connect using redis-cli:
+
+```bash
+redis-cli -h localhost -p 6379
+```
+
+<Note>
+The `proxy` command is particularly useful for ElastiCache instances that are not publicly accessible.
+</Note>
+
+## Connection Examples
+
+<Tabs>
+  <Tab title="Node.js">
+    ```javascript
+    const redis = require('redis');
+    
+    const client = redis.createClient({
+      url: process.env.CACHE_URL
+    });
+    
+    await client.connect();
+    
+    await client.set('key', 'value');
+    const value = await client.get('key');
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import redis
+    import os
+    
+    r = redis.from_url(os.environ['CACHE_URL'])
+    
+    r.set('key', 'value')
+    value = r.get('key')
+    ```
+  </Tab>
+  <Tab title="Ruby">
+    ```ruby
+    require 'redis'
+    
+    redis = Redis.new(url: ENV['CACHE_URL'])
+    
+    redis.set('key', 'value')
+    value = redis.get('key')
+    ```
+  </Tab>
+  <Tab title="Go">
+    ```go
+    package main
+    
+    import (
+        "github.com/go-redis/redis/v8"
+        "os"
+    )
+    
+    func main() {
+        opt, _ := redis.ParseURL(os.Getenv("CACHE_URL"))
+        client := redis.NewClient(opt)
+        
+        client.Set(ctx, "key", "value", 0)
+        val, _ := client.Get(ctx, "key").Result()
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Production Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Enable Deletion Protection" icon="shield-check">
+    Set `deletionProtection: true` to prevent accidental deletion of production cache clusters.
+  </Card>
+  <Card title="Use Multi-AZ" icon="server">
+    Enable `durable: true` for automatic failover and high availability in production.
+  </Card>
+  <Card title="Enable Encryption" icon="lock">
+    Use both `encrypted: true` and `transitEncryption: true` for comprehensive data protection.
+  </Card>
+  <Card title="Right-Size Your Instances" icon="gauge">
+    Monitor memory usage and choose appropriate cache node types (use r5 family for memory-intensive workloads).
+  </Card>
+</CardGroup>
+
+## Common Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Session Storage" icon="user">
+    Store user sessions with automatic expiration and fast access times.
+  </Card>
+  <Card title="Application Cache" icon="bolt">
+    Cache database queries, API responses, and computed results to reduce latency.
+  </Card>
+  <Card title="Rate Limiting" icon="gauge-high">
+    Implement rate limiting using Redis counters with expiration.
+  </Card>
+  <Card title="Job Queues" icon="list">
+    Use Redis as a message broker for background job processing (with libraries like Sidekiq, Bull, etc.).
+  </Card>
+</CardGroup>
+
+## Example Configurations
+
+<Tabs>
+  <Tab title="Development">
+    ```yaml
+    resources:
+      cache:
+        type: redis
+    
+    services:
+      web:
+        resources:
+          - cache
+    ```
+  </Tab>
+  <Tab title="Staging">
+    ```yaml
+    resources:
+      cache:
+        type: elasticache-redis
+        options:
+          class: cache.t3.small
+          version: "7.0"
+          encrypted: true
+    
+    services:
+      web:
+        resources:
+          - cache
+    ```
+  </Tab>
+  <Tab title="Production">
+    ```yaml
+    resources:
+      cache:
+        type: elasticache-redis
+        options:
+          class: cache.m5.large
+          version: "7.0"
+          deletionProtection: true
+          durable: true
+          encrypted: true
+          transitEncryption: true
+          autoMinorVersionUpgrade: true
+    
+    services:
+      web:
+        resources:
+          - cache
+      worker:
+        resources:
+          - cache
+    ```
+  </Tab>
+</Tabs>

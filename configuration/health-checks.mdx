@@ -1,0 +1,503 @@
+---
+title: "Health Checks"
+description: "Configure readiness, liveness, and startup probes for your services"
+---
+
+# Health Checks
+
+Health checks ensure that your services are running correctly and ready to handle requests. Convox supports multiple types of health checks including readiness probes, liveness probes, startup probes, and gRPC health checks.
+
+## Readiness Health Checks
+
+Readiness health checks determine whether a service is ready to receive traffic. Services behind a load balancer require health checks to determine if a process can handle requests.
+
+<Note>
+  Processes that fail two consecutive health checks are assumed dead and will be terminated and replaced.
+</Note>
+
+### Simple Health Check
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    health: /check
+```
+
+<ParamField path="health" type="string">
+  Specifying health as a string sets the path and uses default values for other options
+</ParamField>
+
+### Advanced Health Check
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    health:
+      grace: 10
+      interval: 5
+      path: /health
+      timeout: 3
+```
+
+#### Health Check Parameters
+
+<ParamField path="health.path" type="string" default="/">
+  The HTTP endpoint that will be requested for health checks
+</ParamField>
+
+<ParamField path="health.grace" type="number" default="5">
+  The amount of time in seconds to wait for a process to boot before beginning health checks
+</ParamField>
+
+<ParamField path="health.interval" type="number" default="5">
+  The number of seconds between health checks
+</ParamField>
+
+<ParamField path="health.timeout" type="number" default="4">
+  The number of seconds to wait for a valid response (200-399 status code)
+</ParamField>
+
+<ParamField path="health.disable" type="boolean" default="false">
+  Disable health checks for this service
+</ParamField>
+
+<Warning>
+  Health checks must return a valid HTTP response code (200-399) within the configured timeout.
+</Warning>
+
+## Liveness Checks
+
+Liveness checks monitor the ongoing health of running processes. While readiness probes determine when a service is ready to receive traffic, liveness checks determine when a service should be restarted if it becomes unresponsive.
+
+<Note>
+  When a liveness check fails, Kubernetes will restart the container, which can help recover from deadlocks, memory leaks, or other issues.
+</Note>
+
+### Liveness Check Configuration
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    liveness:
+      path: /liveness/check
+      grace: 15
+      interval: 5
+      timeout: 3
+      successThreshold: 1
+      failureThreshold: 3
+```
+
+#### Liveness Check Parameters
+
+<ParamField path="liveness.path" type="string" required>
+  **Required.** The HTTP endpoint that will be requested for liveness checks
+</ParamField>
+
+<ParamField path="liveness.grace" type="number" default="10">
+  The amount of time in seconds to wait before beginning liveness checks
+</ParamField>
+
+<ParamField path="liveness.interval" type="number" default="5">
+  The number of seconds between liveness checks
+</ParamField>
+
+<ParamField path="liveness.timeout" type="number" default="5">
+  The number of seconds to wait for a successful response
+</ParamField>
+
+<ParamField path="liveness.successThreshold" type="number" default="1">
+  The number of consecutive successful checks required
+</ParamField>
+
+<ParamField path="liveness.failureThreshold" type="number" default="3">
+  The number of consecutive failed checks before restarting the container
+</ParamField>
+
+### Liveness Check Use Cases
+
+<Tabs>
+  <Tab title="Deadlock Detection">
+    ```yaml
+    services:
+      worker:
+        build: .
+        liveness:
+          path: /worker/health
+          grace: 30
+          interval: 10
+          failureThreshold: 5
+    ```
+    Detects and recovers from deadlocked worker processes.
+  </Tab>
+  
+  <Tab title="Memory Monitoring">
+    ```yaml
+    services:
+      processor:
+        build: .
+        liveness:
+          path: /memory-check
+          grace: 45
+          interval: 15
+          timeout: 10
+          failureThreshold: 3
+    ```
+    Monitors memory-intensive applications and restarts if unhealthy.
+  </Tab>
+</Tabs>
+
+<Warning>
+  Liveness checks should be configured conservatively to avoid unnecessary restarts. False positives can cause service disruption.
+</Warning>
+
+## Startup Probes
+
+Startup probes check if an application has successfully started before allowing readiness and liveness probes to take effect. This is particularly useful for applications with long or variable startup times.
+
+<Note>
+  When a startup probe is configured, all other probes are disabled until it succeeds.
+</Note>
+
+### TCP Startup Probe
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    startupProbe:
+      tcpSocketPort: 3000
+      grace: 30
+      interval: 10
+      timeout: 5
+      successThreshold: 1
+      failureThreshold: 30
+```
+
+<ParamField path="startupProbe.tcpSocketPort" type="number" required>
+  **Required.** The TCP port to check for startup success
+</ParamField>
+
+### HTTP Startup Probe
+
+```yaml
+services:
+  api:
+    build: .
+    port: 8080
+    startupProbe:
+      path: /startup
+      grace: 10
+      interval: 5
+      failureThreshold: 40
+```
+
+<ParamField path="startupProbe.path" type="string" required>
+  **Required.** The HTTP endpoint to check for startup success
+</ParamField>
+
+#### Startup Probe Parameters
+
+<ParamField path="startupProbe.grace" type="number" default="0">
+  The number of seconds to wait before starting startup checks
+</ParamField>
+
+<ParamField path="startupProbe.interval" type="number" default="10">
+  The number of seconds between startup probe checks
+</ParamField>
+
+<ParamField path="startupProbe.timeout" type="number" default="1">
+  The number of seconds to wait for a successful response
+</ParamField>
+
+<ParamField path="startupProbe.successThreshold" type="number" default="1">
+  The number of consecutive successful checks required
+</ParamField>
+
+<ParamField path="startupProbe.failureThreshold" type="number" default="3">
+  The number of consecutive failed checks before restarting the container
+</ParamField>
+
+### Startup Probe Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Database Migrations" icon="database">
+    Applications that run database migrations on startup
+  </Card>
+  <Card title="Cache Warming" icon="fire">
+    Services that need to populate caches before serving traffic
+  </Card>
+  <Card title="Large Applications" icon="box">
+    Applications with significant initialization requirements
+  </Card>
+  <Card title="Configuration Loading" icon="gear">
+    Services that load extensive configuration on startup
+  </Card>
+</CardGroup>
+
+### Complete Example with All Probes
+
+```yaml
+services:
+  analytics:
+    build: .
+    port: 5000
+    startupProbe:
+      tcpSocketPort: 5000
+      grace: 60
+      interval: 15
+      failureThreshold: 20  # Allows up to 5 minutes for startup
+    health:
+      path: /health
+      interval: 5
+    liveness:
+      path: /live
+      interval: 10
+      failureThreshold: 3
+```
+
+<Note>
+  In this example, the startup probe allows up to 5 minutes (15s × 20) for the application to start. Once successful, health and liveness checks begin.
+</Note>
+
+<Warning>
+  Version 3.19.7+ required for startup probes.
+</Warning>
+
+## gRPC Health Checks
+
+For services using gRPC, Convox provides support for gRPC health checks through the gRPC health checking protocol.
+
+### Basic gRPC Configuration
+
+```yaml
+services:
+  api:
+    build: .
+    port: grpc:50051
+    grpcHealthEnabled: true
+```
+
+<ParamField path="port" type="string">
+  Must specify `grpc:` prefix for gRPC services
+</ParamField>
+
+<ParamField path="grpcHealthEnabled" type="boolean" default="false">
+  Enables gRPC health checking protocol
+</ParamField>
+
+### Advanced gRPC Configuration
+
+```yaml
+services:
+  api:
+    build: .
+    port: grpc:50051
+    grpcHealthEnabled: true
+    health:
+      grace: 20
+      interval: 5
+      path: /
+      timeout: 2
+```
+
+<Note>
+  The `path` attribute specifies the service name to check within your gRPC health implementation.
+</Note>
+
+### Implementation Requirements
+
+Services must implement the [gRPC Health Checking Protocol](https://github.com/grpc/grpc/blob/master/doc/health-checking.md).
+
+<CodeGroup>
+```go Go Implementation
+import (
+	"context"
+	
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+)
+
+func main() {
+	server := grpc.NewServer()
+	
+	// Register your service
+	// pb.RegisterYourServiceServer(server, &yourServiceImpl{})
+	
+	// Register the health service
+	healthServer := health.NewServer()
+	healthpb.RegisterHealthServer(server, healthServer)
+	
+	// Set service as serving
+	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
+	
+	// Continue with server initialization...
+}
+```
+
+```javascript Node.js Implementation
+const grpc = require('@grpc/grpc-js');
+const health = require('grpc-health-check');
+
+const server = new grpc.Server();
+
+// Register your service
+// server.addService(yourService, implementation);
+
+// Register health service
+const healthImpl = new health.Implementation({
+  '': 'SERVING'
+});
+server.addService(health.service, healthImpl);
+```
+</CodeGroup>
+
+### Probe Behavior
+
+When `grpcHealthEnabled` is `true`, Convox configures:
+
+<CardGroup cols={2}>
+  <Card title="Readiness Probe" icon="check">
+    Determines whether the service is ready to receive traffic
+  </Card>
+  <Card title="Liveness Probe" icon="heartbeat">
+    Monitors ongoing health and initiates restarts if necessary
+  </Card>
+</CardGroup>
+
+## Health Check Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Lightweight Checks" icon="feather">
+    Keep health check endpoints fast and simple - avoid heavy operations
+  </Card>
+  <Card title="Dependency Checks" icon="link">
+    Include critical dependency checks (database, cache) in health endpoints
+  </Card>
+  <Card title="Separate Endpoints" icon="split">
+    Use different endpoints for readiness, liveness, and startup checks
+  </Card>
+  <Card title="Conservative Timeouts" icon="clock">
+    Set appropriate grace periods and failure thresholds to avoid false positives
+  </Card>
+</CardGroup>
+
+## Health Check Timing
+
+<Tabs>
+  <Tab title="Fast Startup">
+    ```yaml
+    services:
+      web:
+        health:
+          grace: 5
+          interval: 5
+          timeout: 3
+        liveness:
+          grace: 10
+          interval: 10
+    ```
+    For applications that start quickly (< 10 seconds)
+  </Tab>
+  
+  <Tab title="Normal Startup">
+    ```yaml
+    services:
+      web:
+        health:
+          grace: 30
+          interval: 5
+          timeout: 5
+        liveness:
+          grace: 45
+          interval: 15
+    ```
+    For typical applications (10-60 seconds)
+  </Tab>
+  
+  <Tab title="Slow Startup">
+    ```yaml
+    services:
+      web:
+        startupProbe:
+          tcpSocketPort: 3000
+          grace: 60
+          interval: 15
+          failureThreshold: 30
+        health:
+          grace: 10
+          interval: 5
+        liveness:
+          grace: 20
+          interval: 15
+    ```
+    For applications with long initialization (> 60 seconds)
+  </Tab>
+</Tabs>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Service keeps restarting">
+    Common causes:
+    - Health check timeout too short
+    - Health endpoint returning error status codes
+    - Grace period too short for application startup
+    - Check logs: `convox logs -s <service>`
+  </Accordion>
+  
+  <Accordion title="Service not receiving traffic">
+    Check that:
+    - Health check endpoint returns 200-399 status code
+    - Service is actually listening on configured port
+    - Health check path is correct
+    - Use `convox ps` to check service status
+  </Accordion>
+  
+  <Accordion title="gRPC health checks failing">
+    Verify:
+    - `port` uses `grpc:` prefix
+    - gRPC health protocol is implemented
+    - Service is actually listening on the gRPC port
+    - Health service is registered correctly
+  </Accordion>
+</AccordionGroup>
+
+## Version Requirements
+
+<ParamField path="Basic health checks" type="string">
+  All versions
+</ParamField>
+
+<ParamField path="Liveness checks" type="string">
+  All versions
+</ParamField>
+
+<ParamField path="Startup probes" type="string">
+  Version 3.19.7+
+</ParamField>
+
+<ParamField path="gRPC health checks" type="string">
+  All versions
+</ParamField>
+
+## Related Documentation
+
+<CardGroup cols={3}>
+  <Card title="Load Balancers" icon="scale-balanced" href="/configuration/load-balancers">
+    Configure traffic routing to healthy services
+  </Card>
+  <Card title="Service" icon="server" href="/reference/primitives/app/service">
+    Complete service configuration reference
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/deployment/rolling-updates">
+    Understanding deployment and health checks
+  </Card>
+</CardGroup>

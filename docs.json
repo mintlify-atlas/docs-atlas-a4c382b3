@@ -1,122 +1,149 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Convox",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#343434",
+    "light": "#73bbcc",
+    "dark": "#144c5d"
   },
-  "favicon": "/favicon.svg",
+  "logo": {
+    "light": "https://media.brand.dev/bb170fda-c2d8-4fa0-bb09-4ab798c0dc60.svg",
+    "dark": "https://media.brand.dev/bb170fda-c2d8-4fa0-bb09-4ab798c0dc60.svg"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/convox/convox"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/convox/convox"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Getting Started",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
-              "development"
+              "architecture"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Installation",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "installation/overview",
+              "installation/cli",
+              "installation/development-rack",
+              "installation/production-rack"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Cloud Providers",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "cloud/aws",
+              "cloud/gcp",
+              "cloud/azure",
+              "cloud/digital-ocean"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Configuration",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "configuration/convox-yml",
+              "configuration/environment",
+              "configuration/load-balancers",
+              "configuration/service-discovery",
+              "configuration/health-checks",
+              "configuration/volumes",
+              "configuration/rack-parameters",
+              "configuration/app-parameters"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/deploying-changes",
+              "deployment/ci-cd-workflows",
+              "deployment/rolling-updates",
+              "deployment/rollbacks",
+              "deployment/scaling",
+              "deployment/custom-domains",
+              "deployment/ssl"
+            ]
+          },
+          {
+            "group": "Management",
+            "pages": [
+              "management/run",
+              "management/logs",
+              "management/monitoring",
+              "management/troubleshooting"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Primitives",
             "pages": [
-              "api-reference/introduction"
+              "reference/primitives/overview",
+              "reference/primitives/rack",
+              "reference/primitives/app"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "App Primitives",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "reference/primitives/service",
+              "reference/primitives/build",
+              "reference/primitives/release",
+              "reference/primitives/process",
+              "reference/primitives/resource",
+              "reference/primitives/balancer",
+              "reference/primitives/timer",
+              "reference/primitives/object"
+            ]
+          },
+          {
+            "group": "Resources",
+            "pages": [
+              "reference/resources/overview",
+              "reference/resources/postgres",
+              "reference/resources/mysql",
+              "reference/resources/redis",
+              "reference/resources/memcached",
+              "reference/resources/s3",
+              "reference/resources/sqs"
+            ]
+          },
+          {
+            "group": "CLI Reference",
+            "pages": [
+              "cli/overview",
+              "cli/apps",
+              "cli/build",
+              "cli/deploy",
+              "cli/env",
+              "cli/logs",
+              "cli/ps",
+              "cli/rack",
+              "cli/run",
+              "cli/scale",
+              "cli/services",
+              "cli/resources"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

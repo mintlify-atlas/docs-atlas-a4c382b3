@@ -1,0 +1,568 @@
+---
+title: resources
+description: Manage databases and backing services
+---
+
+The `resources` command group provides tools for managing backing services like databases, caches, and queues. Resources are defined in your `convox.yml` and automatically provisioned by Convox.
+
+## resources
+
+List all resources for an application.
+
+### Usage
+
+```bash
+convox resources
+```
+
+### Flags
+
+<ParamField path="--app" type="string" default="-a">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string" default="-r">
+  Rack name
+</ParamField>
+
+### Example Output
+
+```bash
+$ convox resources
+NAME      TYPE      URL
+database  postgres  postgres://user:pass@host.rds.amazonaws.com:5432/db
+redis     redis     redis://host.cache.amazonaws.com:6379
+```
+
+## resources console
+
+Start an interactive console for a resource.
+
+### Usage
+
+```bash
+convox resources console <resource>
+```
+
+### Arguments
+
+<ParamField path="resource" type="string" required>
+  Resource name
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string" default="-a">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string" default="-r">
+  Rack name
+</ParamField>
+
+### Example
+
+```bash
+$ convox resources console database
+psql (13.4)
+Type "help" for help.
+
+db=> \dt
+       List of relations
+ Schema | Name  | Type  | Owner
+--------+-------+-------+-------
+ public | users | table | app
+ public | posts | table | app
+
+db=> SELECT COUNT(*) FROM users;
+ count
+-------
+  1543
+```
+
+## resources export
+
+Export data from a resource.
+
+### Usage
+
+```bash
+convox resources export <resource>
+```
+
+### Arguments
+
+<ParamField path="resource" type="string" required>
+  Resource name to export
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string" default="-a">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string" default="-r">
+  Rack name
+</ParamField>
+
+<ParamField path="--file" type="string" default="-f">
+  Export to file
+</ParamField>
+
+### Examples
+
+```bash
+# Export to file
+$ convox resources export database --file backup.tgz
+Exporting resource data... OK
+
+# Export to stdout (pipe to file)
+$ convox resources export database > backup-$(date +%Y%m%d).tgz
+```
+
+## resources import
+
+Import data to a resource.
+
+### Usage
+
+```bash
+convox resources import <resource>
+```
+
+### Arguments
+
+<ParamField path="resource" type="string" required>
+  Resource name to import to
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string" default="-a">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string" default="-r">
+  Rack name
+</ParamField>
+
+<ParamField path="--file" type="string" default="-f">
+  Import from file
+</ParamField>
+
+### Examples
+
+```bash
+# Import from file
+$ convox resources import database --file backup.tgz
+Importing resource data... OK
+
+# Import from stdin
+$ cat backup.tgz | convox resources import database
+Importing resource data... OK
+```
+
+<Note>
+  Importing data will overwrite existing data in the resource. Always backup before importing.
+</Note>
+
+## resources info
+
+Display detailed information about a resource.
+
+### Usage
+
+```bash
+convox resources info <resource>
+```
+
+### Arguments
+
+<ParamField path="resource" type="string" required>
+  Resource name
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string" default="-a">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string" default="-r">
+  Rack name
+</ParamField>
+
+### Example Output
+
+```bash
+$ convox resources info database
+Name  database
+Type  postgres
+URL   postgres://user:pass@host.rds.amazonaws.com:5432/db
+```
+
+## resources proxy
+
+Proxy a local port to a resource for direct access.
+
+### Usage
+
+```bash
+convox resources proxy <resource>
+```
+
+### Arguments
+
+<ParamField path="resource" type="string" required>
+  Resource name to proxy
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string" default="-a">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string" default="-r">
+  Rack name
+</ParamField>
+
+<ParamField path="--port" type="integer" default="-p">
+  Local port to use (defaults to remote port)
+</ParamField>
+
+<ParamField path="--tls" type="boolean" default="-t">
+  Wrap connection in TLS
+</ParamField>
+
+### Examples
+
+```bash
+# Proxy to default port
+$ convox resources proxy database
+proxying localhost:5432 to host.rds.amazonaws.com:5432
+
+# Use in another terminal
+$ psql postgres://localhost:5432/db
+```
+
+```bash
+# Proxy to custom port
+$ convox resources proxy database --port 65432
+proxying localhost:65432 to host.rds.amazonaws.com:5432
+
+# Connect using custom port
+$ psql postgres://localhost:65432/db
+```
+
+<Note>
+  The proxy runs in the foreground. Press Ctrl+C to stop it. Keep it running while accessing the resource locally.
+</Note>
+
+## resources url
+
+Get the connection URL for a resource.
+
+### Usage
+
+```bash
+convox resources url <resource>
+```
+
+### Arguments
+
+<ParamField path="resource" type="string" required>
+  Resource name
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string" default="-a">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string" default="-r">
+  Rack name
+</ParamField>
+
+### Example
+
+```bash
+$ convox resources url database
+postgres://app:password@host.rds.amazonaws.com:5432/app
+
+$ convox resources url redis
+redis://host.elasticache.amazonaws.com:6379
+```
+
+## Resource Types
+
+Convox supports various resource types:
+
+### PostgreSQL
+
+```yaml
+resources:
+  database:
+    type: postgres
+    options:
+      storage: 100
+      class: db.t3.micro
+```
+
+### MySQL
+
+```yaml
+resources:
+  database:
+    type: mysql
+    options:
+      storage: 100
+      class: db.t3.micro
+```
+
+### Redis
+
+```yaml
+resources:
+  cache:
+    type: redis
+    options:
+      class: cache.t3.micro
+```
+
+### S3 Bucket
+
+```yaml
+resources:
+  storage:
+    type: s3
+```
+
+### SQS Queue
+
+```yaml
+resources:
+  queue:
+    type: sqs
+```
+
+## Common Workflows
+
+### Database Backup
+
+```bash
+# Export database
+$ convox resources export database --file backup-$(date +%Y%m%d).tgz
+Exporting resource data... OK
+
+# Verify backup file
+$ ls -lh backup-*.tgz
+-rw-r--r-- 1 user staff 45M Jan 15 10:30 backup-20240115.tgz
+```
+
+### Database Restore
+
+```bash
+# Import from backup
+$ convox resources import database --file backup-20240115.tgz
+Importing resource data... OK
+
+# Verify data
+$ convox resources console database
+psql> SELECT COUNT(*) FROM users;
+```
+
+### Local Database Access
+
+```bash
+# Start proxy
+$ convox resources proxy database
+proxying localhost:5432 to host.rds.amazonaws.com:5432
+
+# In another terminal, use local tools
+$ psql postgres://localhost:5432/app
+$ pg_dump postgres://localhost:5432/app > local-backup.sql
+```
+
+### Copy Database Between Environments
+
+```bash
+# Export from production
+$ convox resources export database --app myapp-production --file prod-db.tgz
+
+# Import to staging
+$ convox resources import database --app myapp-staging --file prod-db.tgz
+```
+
+### Database Migrations
+
+```bash
+# Run migrations using convox run
+$ convox run web bin/rails db:migrate
+
+# Or connect directly
+$ convox resources console database
+psql> \i migration.sql
+```
+
+### Monitor Resource Usage
+
+```bash
+# Get connection details
+$ convox resources info database
+
+# Connect and check size
+$ convox resources console database
+psql> SELECT pg_size_pretty(pg_database_size('app'));
+pg_size_pretty
+----------------
+ 245 MB
+```
+
+## Best Practices
+
+### 1. Regular Backups
+
+Automate database backups:
+
+```bash
+#!/bin/bash
+# backup-db.sh
+DATE=$(date +%Y%m%d-%H%M%S)
+convox resources export database --file "backups/db-$DATE.tgz"
+
+# Keep last 7 days
+find backups/ -name "db-*.tgz" -mtime +7 -delete
+```
+
+### 2. Test Restores
+
+Regularly verify backups work:
+
+```bash
+# Export from production
+convox resources export database --app prod --file backup.tgz
+
+# Import to test environment
+convox resources import database --app test --file backup.tgz
+
+# Verify data
+convox resources console database --app test
+```
+
+### 3. Use Environment-Specific Resources
+
+Separate resources per environment:
+
+```yaml
+# Production
+resources:
+  database:
+    type: postgres
+    options:
+      class: db.r5.large
+      storage: 500
+
+# Staging
+resources:
+  database:
+    type: postgres
+    options:
+      class: db.t3.small
+      storage: 100
+```
+
+### 4. Secure Access
+
+Use proxy for local access, never expose databases publicly:
+
+```bash
+# Good: Use proxy
+convox resources proxy database
+psql postgres://localhost:5432/app
+
+# Bad: Don't expose database to internet
+```
+
+### 5. Monitor Resource Health
+
+Regularly check resource status:
+
+```bash
+# Check all resources
+convox resources
+
+# Check specific resource
+convox resources info database
+
+# Test connectivity
+convox resources url database | xargs psql -c 'SELECT 1'
+```
+
+## Troubleshooting
+
+### Connection Refused
+
+If you can't connect to a resource:
+
+```bash
+# Verify resource exists
+$ convox resources
+
+# Check resource URL
+$ convox resources url database
+
+# Test connectivity from app
+$ convox run web psql $DATABASE_URL -c 'SELECT 1'
+```
+
+### Proxy Not Working
+
+If proxy connection fails:
+
+```bash
+# Verify resource URL is valid
+$ convox resources url database
+
+# Check local port is free
+$ lsof -i :5432
+
+# Try different port
+$ convox resources proxy database --port 15432
+```
+
+### Import Fails
+
+If import doesn't work:
+
+```bash
+# Verify backup file
+$ file backup.tgz
+backup.tgz: gzip compressed data
+
+# Check file size
+$ ls -lh backup.tgz
+
+# Try exporting and re-importing
+$ convox resources export database --file new-backup.tgz
+$ convox resources import database --file new-backup.tgz
+```
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="Run" icon="terminal" href="/cli/run">
+    Run database migrations
+  </Card>
+  <Card title="Env" icon="gear" href="/cli/env">
+    Manage resource URLs
+  </Card>
+  <Card title="Apps Export" icon="download" href="/cli/apps">
+    Export entire app with resources
+  </Card>
+  <Card title="Apps Import" icon="upload" href="/cli/apps">
+    Import app with resources
+  </Card>
+</CardGroup>

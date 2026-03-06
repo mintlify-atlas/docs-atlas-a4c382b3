@@ -1,0 +1,530 @@
+---
+title: Development Rack
+description: Install a local Convox rack for development and testing
+---
+
+A development rack runs on your local workstation and provides an environment nearly identical to production. This allows you to develop and test your applications locally before deploying to the cloud.
+
+## What is a Development Rack?
+
+A development rack is a local Convox installation that:
+
+- Runs on Minikube (local Kubernetes cluster)
+- Provides the same API and features as production racks
+- Allows offline development and testing
+- Requires no cloud account or credentials
+- Uses local Docker for container builds
+
+<Note>
+  Development racks are perfect for learning Convox, developing applications, and testing changes before deploying to production.
+</Note>
+
+## Choose Your Platform
+
+Select your operating system for specific installation instructions:
+
+<CardGroup cols={2}>
+  <Card title="macOS Intel" icon="apple" href="#macos-intel">
+    Installation for Intel-based Macs (x86_64)
+  </Card>
+  <Card title="macOS Apple Silicon" icon="apple" href="#macos-apple-silicon">
+    Installation for M1/M2/M3 Macs (ARM64)
+  </Card>
+  <Card title="Ubuntu Linux" icon="ubuntu" href="#ubuntu-linux">
+    Installation for Ubuntu 22.04 LTS
+  </Card>
+</CardGroup>
+
+---
+
+## macOS Intel
+
+### Prerequisites
+
+Before installing a development rack on macOS Intel, install the following:
+
+<Steps>
+  <Step title="Install Convox CLI">
+    Follow the [CLI installation guide](/installation/cli) to install the Convox command-line tool.
+  </Step>
+  
+  <Step title="Install Docker Desktop">
+    Download and install [Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/).
+    
+    Ensure Docker Desktop is running before proceeding.
+  </Step>
+  
+  <Step title="Install Minikube">
+    Install [Minikube 1.29.0 or later](https://minikube.sigs.k8s.io/docs/start/):
+    
+    ```bash
+    brew install minikube
+    ```
+  </Step>
+  
+  <Step title="Install Terraform">
+    Install [Terraform](https://developer.hashicorp.com/terraform/downloads):
+    
+    ```bash
+    brew install terraform
+    ```
+  </Step>
+</Steps>
+
+### Installation
+
+<Steps>
+  <Step title="Choose a rack name">
+    Select a name for your local rack. For this guide, we'll use `test-local`:
+    
+    ```bash
+    export RACK_NAME=test-local
+    ```
+  </Step>
+  
+  <Step title="Check Kubernetes version">
+    Verify the Kubernetes version for your [Convox rack version](https://github.com/convox/convox/releases). At the time of writing, it's `v1.23.0`:
+    
+    ```bash
+    export K8S_VERSION=v1.23.0
+    ```
+  </Step>
+  
+  <Step title="Start Minikube">
+    Start Minikube with the required configuration:
+    
+    ```bash
+    minikube start \
+      --kubernetes-version=$K8S_VERSION \
+      --insecure-registry="https://registry.$RACK_NAME.macdev.convox.cloud" \
+      --driver=docker
+    ```
+    
+    <Note>
+      If you receive an error regarding docker permissions, run the group command shown in the output.
+    </Note>
+  </Step>
+  
+  <Step title="Enable Minikube addons">
+    Enable the required Minikube addons:
+    
+    ```bash
+    minikube addons enable ingress
+    minikube addons enable ingress-dns
+    ```
+  </Step>
+  
+  <Step title="Install the rack">
+    Install the Convox development rack:
+    
+    ```bash
+    convox rack install local $RACK_NAME -v 3.10.5 os=mac
+    ```
+    
+    <Warning>
+      Rack version must be `3.10.5` or later for development rack support.
+    </Warning>
+    
+    This process may take 5-10 minutes.
+  </Step>
+  
+  <Step title="Verify rack installation">
+    Confirm the rack is installed:
+    
+    ```bash
+    convox racks
+    ```
+    
+    You should see your rack in the list.
+  </Step>
+  
+  <Step title="Start Minikube tunnel">
+    Open a new terminal window and run:
+    
+    ```bash
+    minikube tunnel
+    ```
+    
+    <Warning>
+      Keep this terminal window open while using the rack. The tunnel is required for accessing rack services.
+    </Warning>
+  </Step>
+  
+  <Step title="Test rack connectivity">
+    Verify the rack is accessible:
+    
+    ```bash
+    convox rack -r $RACK_NAME
+    ```
+  </Step>
+</Steps>
+
+### Management
+
+Local rack files are stored at:
+```
+/Users/$USER/Library/Preferences/convox/racks/<RACK_NAME>
+```
+
+If you need to delete the rack:
+
+```bash
+sudo rm -rf /Users/$USER/Library/Preferences/convox/racks/$RACK_NAME
+```
+
+---
+
+## macOS Apple Silicon
+
+### Prerequisites
+
+Before installing a development rack on macOS Apple Silicon (M1/M2/M3), install the following:
+
+<Steps>
+  <Step title="Install Convox CLI">
+    Follow the [CLI installation guide](/installation/cli) to install the Convox command-line tool (ARM64 version).
+  </Step>
+  
+  <Step title="Install Docker Desktop">
+    Download and install [Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/) (Apple Silicon version).
+    
+    Ensure Docker Desktop is running before proceeding.
+  </Step>
+  
+  <Step title="Install Minikube">
+    Install [Minikube 1.29.0 or later](https://minikube.sigs.k8s.io/docs/start/):
+    
+    ```bash
+    brew install minikube
+    ```
+  </Step>
+  
+  <Step title="Install Terraform">
+    Install [Terraform](https://developer.hashicorp.com/terraform/downloads):
+    
+    ```bash
+    brew install terraform
+    ```
+  </Step>
+</Steps>
+
+### Installation
+
+<Steps>
+  <Step title="Choose a rack name">
+    Select a name for your local rack. For this guide, we'll use `test-local`:
+    
+    ```bash
+    export RACK_NAME=test-local
+    ```
+  </Step>
+  
+  <Step title="Check Kubernetes version">
+    Verify the Kubernetes version for your [Convox rack version](https://github.com/convox/convox/releases). At the time of writing, it's `v1.23.0`:
+    
+    ```bash
+    export K8S_VERSION=v1.23.0
+    ```
+  </Step>
+  
+  <Step title="Start Minikube">
+    Start Minikube with the required configuration:
+    
+    ```bash
+    minikube start \
+      --kubernetes-version=$K8S_VERSION \
+      --insecure-registry="https://registry.$RACK_NAME.macdev.convox.cloud" \
+      --driver=docker
+    ```
+    
+    <Note>
+      If you receive an error regarding docker permissions, run the group command shown in the output.
+    </Note>
+  </Step>
+  
+  <Step title="Enable Minikube addons">
+    Enable the required Minikube addons:
+    
+    ```bash
+    minikube addons enable ingress
+    minikube addons enable ingress-dns
+    ```
+  </Step>
+  
+  <Step title="Install the rack">
+    Install the Convox development rack:
+    
+    ```bash
+    convox rack install local $RACK_NAME -v 3.10.5 os=mac
+    ```
+    
+    <Warning>
+      Rack version must be `3.10.5` or later for development rack support.
+    </Warning>
+    
+    This process may take 5-10 minutes.
+  </Step>
+  
+  <Step title="Verify rack installation">
+    Confirm the rack is installed:
+    
+    ```bash
+    convox racks
+    ```
+    
+    You should see your rack in the list.
+  </Step>
+  
+  <Step title="Start Minikube tunnel">
+    Open a new terminal window and run:
+    
+    ```bash
+    minikube tunnel
+    ```
+    
+    <Warning>
+      Keep this terminal window open while using the rack. The tunnel is required for accessing rack services.
+    </Warning>
+  </Step>
+  
+  <Step title="Test rack connectivity">
+    Verify the rack is accessible:
+    
+    ```bash
+    convox rack -r $RACK_NAME
+    ```
+  </Step>
+</Steps>
+
+### Management
+
+Local rack files are stored at:
+```
+/Users/$USER/Library/Preferences/convox/racks/<RACK_NAME>
+```
+
+If you need to delete the rack:
+
+```bash
+sudo rm -rf /Users/$USER/Library/Preferences/convox/racks/$RACK_NAME
+```
+
+---
+
+## Ubuntu Linux
+
+### Prerequisites
+
+<Note>
+  These instructions are for Ubuntu 22.04 LTS. Other versions may work but are not officially tested.
+</Note>
+
+Before installing a development rack on Ubuntu, install the following:
+
+<Steps>
+  <Step title="Install Convox CLI">
+    Follow the [CLI installation guide](/installation/cli) to install the Convox command-line tool.
+  </Step>
+  
+  <Step title="Install Docker">
+    Install [Docker Engine for Ubuntu](https://docs.docker.com/engine/install/ubuntu/):
+    
+    ```bash
+    # Add Docker's official GPG key
+    sudo apt-get update
+    sudo apt-get install ca-certificates curl
+    sudo install -m 0755 -d /etc/apt/keyrings
+    sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    sudo chmod a+r /etc/apt/keyrings/docker.asc
+    
+    # Add the repository
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+      $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+      sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    
+    # Install Docker
+    sudo apt-get update
+    sudo apt-get install docker-ce docker-ce-cli containerd.io
+    
+    # Add your user to the docker group
+    sudo usermod -aG docker $USER
+    newgrp docker
+    ```
+  </Step>
+  
+  <Step title="Install Minikube">
+    Install [Minikube 1.29.0 or later](https://minikube.sigs.k8s.io/docs/start/):
+    
+    ```bash
+    curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+    sudo install minikube-linux-amd64 /usr/local/bin/minikube
+    ```
+  </Step>
+  
+  <Step title="Install Terraform">
+    Install [Terraform](https://developer.hashicorp.com/terraform/downloads):
+    
+    ```bash
+    wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+    echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+    sudo apt update && sudo apt install terraform
+    ```
+  </Step>
+</Steps>
+
+### Installation
+
+<Steps>
+  <Step title="Choose a rack name">
+    Select a name for your local rack. For this guide, we'll use `test-local`:
+    
+    ```bash
+    export RACK_NAME=test-local
+    ```
+  </Step>
+  
+  <Step title="Check Kubernetes version">
+    Verify the Kubernetes version for your [Convox rack version](https://github.com/convox/convox/releases). At the time of writing, it's `v1.23.0`:
+    
+    ```bash
+    export K8S_VERSION=v1.23.0
+    ```
+  </Step>
+  
+  <Step title="Start Minikube">
+    Start Minikube with the required configuration:
+    
+    ```bash
+    minikube start \
+      --kubernetes-version=$K8S_VERSION \
+      --insecure-registry="https://registry.$RACK_NAME.localdev.convox.cloud" \
+      --static-ip 192.168.212.2
+    ```
+    
+    <Note>
+      If you receive an error regarding IP `192.168.212.2`, delete docker networks and try again:
+      ```bash
+      docker network prune
+      ```
+      Then re-run the `minikube start` command.
+    </Note>
+    
+    <Note>
+      If you receive an error regarding docker permissions, run the group command shown in the output.
+    </Note>
+  </Step>
+  
+  <Step title="Enable Minikube addons">
+    Enable the required Minikube addons:
+    
+    ```bash
+    minikube addons enable ingress
+    minikube addons enable ingress-dns
+    ```
+  </Step>
+  
+  <Step title="Install the rack">
+    Install the Convox development rack:
+    
+    ```bash
+    convox rack install local $RACK_NAME -v 3.10.5
+    ```
+    
+    <Warning>
+      Rack version must be `3.10.5` or later for development rack support.
+    </Warning>
+    
+    This process may take 5-10 minutes.
+  </Step>
+  
+  <Step title="Verify rack installation">
+    Confirm the rack is installed and accessible:
+    
+    ```bash
+    convox racks
+    convox rack -r $RACK_NAME
+    ```
+  </Step>
+</Steps>
+
+### Management
+
+Local rack files are stored at:
+```
+~/.config/convox/racks/<RACK_NAME>
+```
+
+If you need to delete the rack:
+
+```bash
+sudo rm -rf ~/.config/convox/racks/$RACK_NAME
+```
+
+---
+
+## Troubleshooting
+
+### Minikube won't start
+
+**Issue**: Minikube fails to start with driver errors.
+
+**Solution**: Ensure Docker is running and your user has proper permissions:
+```bash
+# Check Docker status
+sudo systemctl status docker
+
+# Add user to docker group (Linux)
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+### IP address conflicts (Ubuntu)
+
+**Issue**: Static IP `192.168.212.2` is already in use.
+
+**Solution**: Prune Docker networks:
+```bash
+docker network prune
+```
+
+### Tunnel not working (macOS)
+
+**Issue**: Cannot access rack services.
+
+**Solution**: Ensure `minikube tunnel` is running in a separate terminal window:
+```bash
+minikube tunnel
+```
+
+### Rack installation fails
+
+**Issue**: Installation times out or fails.
+
+**Solution**:
+1. Check your internet connection
+2. Verify all prerequisites are installed
+3. Ensure sufficient disk space (20GB+)
+4. Try deleting the rack and starting fresh:
+   ```bash
+   minikube delete
+   # Remove rack files (see Management section)
+   # Then retry installation
+   ```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Deploy Your First App" icon="rocket" href="/reference/primitives/getting-started/introduction">
+    Learn how to deploy applications to your rack
+  </Card>
+  <Card title="Production Rack" icon="cloud" href="/installation/production-rack">
+    Ready for production? Install a cloud rack
+  </Card>
+  <Card title="CLI Reference" icon="terminal" href="/reference/cli">
+    Explore all available CLI commands
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration/app-parameters">
+    Configure your applications
+  </Card>
+</CardGroup>

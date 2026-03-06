@@ -1,0 +1,170 @@
+---
+title: CLI Overview
+description: Complete reference for the Convox Command Line Interface
+---
+
+The Convox CLI is a powerful command-line tool for managing your applications and infrastructure on Kubernetes. It provides a unified interface for deploying apps, managing resources, viewing logs, and controlling your entire platform across multiple cloud providers.
+
+## Installation
+
+Install the latest version of the Convox CLI:
+
+```bash
+curl -L https://convox.com/cli/install.sh | sh
+```
+
+For macOS users with Homebrew:
+
+```bash
+brew install convox
+```
+
+## Authentication
+
+Before using the CLI, authenticate with your rack:
+
+```bash
+convox login <rack-url>
+```
+
+## Core Commands
+
+<CardGroup cols={2}>
+  <Card title="Apps" icon="box" href="/cli/apps">
+    Manage applications - create, delete, list, and configure apps
+  </Card>
+  <Card title="Deploy" icon="rocket" href="/cli/deploy">
+    Build and deploy your applications to production
+  </Card>
+  <Card title="Logs" icon="scroll" href="/cli/logs">
+    Stream and filter application logs in real-time
+  </Card>
+  <Card title="Env" icon="gear" href="/cli/env">
+    Manage environment variables for your applications
+  </Card>
+  <Card title="Build" icon="hammer" href="/cli/build">
+    Create container builds from your source code
+  </Card>
+  <Card title="Run" icon="terminal" href="/cli/run">
+    Execute one-off commands in new containers
+  </Card>
+  <Card title="Scale" icon="chart-line" href="/cli/scale">
+    Scale services and adjust resource allocation
+  </Card>
+  <Card title="Resources" icon="database" href="/cli/resources">
+    Manage databases and other backing services
+  </Card>
+  <Card title="Services" icon="server" href="/cli/services">
+    List and manage application services
+  </Card>
+  <Card title="Processes" icon="list" href="/cli/ps">
+    View and manage running processes
+  </Card>
+  <Card title="Rack" icon="layer-group" href="/cli/rack">
+    Manage your Convox rack installation
+  </Card>
+</CardGroup>
+
+## Common Workflows
+
+### Deploy an Application
+
+```bash
+# Deploy from current directory
+convox deploy
+
+# Deploy with custom build args
+convox deploy --build-args "NODE_ENV=production"
+```
+
+### View Logs
+
+```bash
+# Stream logs for an app
+convox logs
+
+# Filter logs by service
+convox logs --service web
+
+# View logs from last 24 hours
+convox logs --since 24h --no-follow
+```
+
+### Manage Environment Variables
+
+```bash
+# List all environment variables
+convox env
+
+# Set environment variables
+convox env set KEY=value
+
+# Edit interactively
+convox env edit
+```
+
+### Execute Commands
+
+```bash
+# Run a shell in a new container
+convox run web bash
+
+# Execute database migrations
+convox run web bin/rails db:migrate
+```
+
+## Global Flags
+
+These flags are available for most commands:
+
+<ParamField path="--app" type="string">
+  Specify the application name
+</ParamField>
+
+<ParamField path="--rack" type="string">
+  Specify the rack to use
+</ParamField>
+
+<ParamField path="--help" type="boolean">
+  Display help information for any command
+</ParamField>
+
+## Getting Help
+
+Get help for any command:
+
+```bash
+convox <command> --help
+```
+
+For example:
+
+```bash
+convox apps --help
+convox deploy --help
+```
+
+## Version Information
+
+Check your CLI version:
+
+```bash
+convox version
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Deploy Your First App" icon="play" href="/cli/deploy">
+    Learn how to deploy applications with Convox
+  </Card>
+  <Card title="Manage Resources" icon="database" href="/cli/resources">
+    Add databases and backing services
+  </Card>
+  <Card title="Scale Services" icon="chart-line" href="/cli/scale">
+    Optimize resource allocation
+  </Card>
+  <Card title="Rack Management" icon="layer-group" href="/cli/rack">
+    Install and configure racks
+  </Card>
+</CardGroup>

@@ -1,0 +1,392 @@
+---
+title: "Service Discovery"
+description: "Enable internal communication between services in your Convox rack"
+---
+
+# Service Discovery
+
+Service discovery allows your services to communicate with each other within a Convox Rack using predictable DNS names. This enables microservices architecture and inter-service communication without exposing services to the public internet.
+
+## Load Balancer Discovery
+
+The load balancer hostname for a service can be found using `convox services`. Connecting to this hostname distributes traffic across all processes of the service.
+
+### Public Services
+
+For an app named `myapp` with this `convox.yml`:
+
+```yaml
+services:
+  auth:
+    port: 5000
+  web:
+    port: 3000
+```
+
+You would see:
+
+```bash
+$ convox services
+SERVICE  DOMAIN                                PORTS
+auth     auth.myapp.0a1b2c3d4e5f.convox.cloud  443:5000
+web      web.myapp.0a1b2c3d4e5f.convox.cloud   443:3000
+```
+
+The `web` service can reach the `auth` service using:
+
+```
+https://auth.myapp.0a1b2c3d4e5f.convox.cloud:443
+```
+
+<Warning>
+  Both of these services are available to the public internet. Use `internal: true` for private services.
+</Warning>
+
+## Internal Services
+
+You can make a service accessible only inside the Rack by setting its `internal` attribute to `true`.
+
+### Configuration
+
+```yaml
+services:
+  auth:
+    internal: true
+    port: 5000
+  web:
+    port: 3000
+```
+
+```bash
+$ convox services
+SERVICE  DOMAIN                               PORTS
+auth     auth.myapp.convox.local              5000
+web      web.myapp.0a1b2c3d4e5f.convox.cloud  443:3000
+```
+
+<ParamField path="internal" type="boolean" default="false">
+  Set to `true` to make the service accessible only inside the Rack
+</ParamField>
+
+The `web` service can reach the `auth` service using:
+
+```
+http://auth.myapp.convox.local:5000
+```
+
+<Note>
+  Internal services use the `.convox.local` domain and do not receive automatic SSL termination. If you want encrypted connections, handle SSL inside the service.
+</Note>
+
+## Service Communication Patterns
+
+### HTTP Communication
+
+<Tabs>
+  <Tab title="Internal">
+    ```yaml
+    services:
+      api:
+        internal: true
+        port: 5000
+        health: /health
+      web:
+        port: 3000
+        environment:
+          - API_URL=http://api.myapp.convox.local:5000
+    ```
+    
+    ```javascript
+    // In the web service
+    const apiUrl = process.env.API_URL;
+    const response = await fetch(`${apiUrl}/users`);
+    ```
+  </Tab>
+  
+  <Tab title="Public">
+    ```yaml
+    services:
+      api:
+        port: 5000
+        health: /health
+      web:
+        port: 3000
+        environment:
+          - API_URL
+    ```
+    
+    ```bash
+    # Set the public API URL
+    $ convox env set API_URL=https://api.myapp.0a1b2c3d4e5f.convox.cloud
+    ```
+  </Tab>
+</Tabs>
+
+### gRPC Communication
+
+```yaml
+services:
+  grpc-server:
+    internal: true
+    port: grpc:50051
+    grpcHealthEnabled: true
+  client:
+    port: 3000
+    environment:
+      - GRPC_SERVER=grpc-server.myapp.convox.local:50051
+```
+
+```javascript
+// In the client service
+const grpc = require('@grpc/grpc-js');
+const client = new MyServiceClient(
+  process.env.GRPC_SERVER,
+  grpc.credentials.createInsecure()
+);
+```
+
+### Database Communication
+
+When you link resources, Convox automatically creates environment variables:
+
+```yaml
+resources:
+  database:
+    type: postgres
+services:
+  web:
+    resources:
+      - database
+    port: 3000
+```
+
+<Note>
+  The `database` resource automatically provides `DATABASE_URL`, `DATABASE_HOST`, `DATABASE_PORT`, and other connection variables.
+</Note>
+
+```javascript
+// In the web service
+const { Pool } = require('pg');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL
+});
+```
+
+## DNS Names
+
+### Internal Service DNS Format
+
+```
+<service>.<app>.convox.local
+```
+
+<ParamField path="service" type="string">
+  Name of the service as defined in convox.yml
+</ParamField>
+
+<ParamField path="app" type="string">
+  Name of the application
+</ParamField>
+
+### Public Service DNS Format
+
+```
+<service>.<app>.<rack-domain>.convox.cloud
+```
+
+<ParamField path="rack-domain" type="string">
+  Unique domain assigned to your rack
+</ParamField>
+
+## Service Discovery Examples
+
+### Microservices Architecture
+
+```yaml
+services:
+  frontend:
+    build: ./frontend
+    port: 3000
+    environment:
+      - API_URL=http://api.myapp.convox.local:5000
+      - AUTH_URL=http://auth.myapp.convox.local:4000
+  
+  api:
+    internal: true
+    build: ./api
+    port: 5000
+    environment:
+      - AUTH_URL=http://auth.myapp.convox.local:4000
+    resources:
+      - database
+  
+  auth:
+    internal: true
+    build: ./auth
+    port: 4000
+    resources:
+      - database
+
+resources:
+  database:
+    type: postgres
+```
+
+<Note>
+  Only `frontend` is publicly accessible. The `api` and `auth` services are internal and communicate using `.convox.local` domains.
+</Note>
+
+### Worker Queue Pattern
+
+```yaml
+services:
+  web:
+    build: .
+    port: 3000
+    resources:
+      - redis
+  
+  worker:
+    build: .
+    command: bin/worker
+    scale:
+      count: 3
+    resources:
+      - redis
+
+resources:
+  redis:
+    type: redis
+```
+
+```javascript
+// Both web and worker can access Redis
+const redis = require('redis');
+const client = redis.createClient({
+  url: process.env.REDIS_URL
+});
+
+// Web service enqueues jobs
+await client.lpush('jobs', JSON.stringify(job));
+
+// Worker service processes jobs
+const job = await client.brpop('jobs', 0);
+```
+
+### Multiple Ports
+
+```yaml
+services:
+  web:
+    port: 3000
+    ports:
+      - 4000  # metrics
+      - 5000  # admin
+    environment:
+      - METRICS_PORT=4000
+      - ADMIN_PORT=5000
+  
+  monitor:
+    internal: true
+    build: ./monitor
+    port: 8080
+    environment:
+      - WEB_METRICS=http://web.myapp.convox.local:4000/metrics
+```
+
+<Note>
+  Additional ports defined in `ports:` are accessible for internal communication but not exposed through the main load balancer.
+</Note>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Internal Services" icon="shield">
+    Set `internal: true` for services that should not be publicly accessible
+  </Card>
+  <Card title="Environment Variables" icon="circle-nodes">
+    Store service URLs in environment variables for flexibility
+  </Card>
+  <Card title="Health Checks" icon="heart-pulse">
+    Configure health checks for all services to ensure reliability
+  </Card>
+  <Card title="Connection Pooling" icon="layer-group">
+    Use connection pooling for database and service connections
+  </Card>
+</CardGroup>
+
+## DNS Configuration
+
+### Custom DNS Settings
+
+You can customize DNS behavior for services:
+
+```yaml
+services:
+  web:
+    port: 3000
+    dnsConfig:
+      ndots: 5
+```
+
+<ParamField path="dnsConfig.ndots" type="number">
+  Number of dots required in a name for initial absolute query
+</ParamField>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Cannot connect to internal service">
+    Check that:
+    1. Service is set to `internal: true` in `convox.yml`
+    2. Service has a `port` defined
+    3. Using correct DNS format: `<service>.<app>.convox.local`
+    4. Health check is passing (use `convox ps`)
+  </Accordion>
+  
+  <Accordion title="DNS resolution failing">
+    - Verify service name matches `convox.yml` definition
+    - Check that both services are in the same app
+    - Try using IP address temporarily to isolate DNS issues
+    - Review `dnsConfig` settings if customized
+  </Accordion>
+  
+  <Accordion title="Connection timeout">
+    - Ensure the target service is running (`convox ps`)
+    - Verify port number is correct
+    - Check service health status
+    - Review service logs for errors (`convox logs -s <service>`)
+  </Accordion>
+</AccordionGroup>
+
+## Testing Service Discovery
+
+You can test service discovery from within a running container:
+
+```bash
+# Connect to a running process
+$ convox exec -a myapp web bash
+
+# Test DNS resolution
+$ nslookup auth.myapp.convox.local
+
+# Test HTTP connectivity
+$ curl http://auth.myapp.convox.local:5000/health
+
+# Test TCP connectivity
+$ nc -zv auth.myapp.convox.local 5000
+```
+
+## Related Documentation
+
+<CardGroup cols={3}>
+  <Card title="Load Balancers" icon="scale-balanced" href="/configuration/load-balancers">
+    Configure external load balancing
+  </Card>
+  <Card title="Resources" icon="database" href="/reference/primitives/app/resource">
+    Database and resource linking
+  </Card>
+  <Card title="Environment Variables" icon="circle-nodes" href="/configuration/environment">
+    Manage service configuration
+  </Card>
+</CardGroup>

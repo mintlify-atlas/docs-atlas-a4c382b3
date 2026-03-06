@@ -1,0 +1,604 @@
+---
+title: "convox.yml"
+description: "Complete reference for configuring your Convox application manifest"
+---
+
+# convox.yml
+
+`convox.yml` is a manifest used to describe your application and all of its infrastructure needs. This file defines your services, resources, timers, load balancers, and environment configuration.
+
+## Complete Example
+
+```yaml
+environment:
+  - COMPANY=Convox
+  - DOCS_URL
+appSettings:
+  awsLogs:
+    cwRetention: 31
+    disableRetention: false
+resources:
+  database:
+    type: postgres
+    options:
+      storage: 200
+  queue:
+    type: redis
+services:
+  api:
+    annotations:
+      - test.annotation.org/value=foobar
+    build: .
+    command: bin/api
+    environment:
+      - ENCRYPTION_KEY
+    health: /check
+    internal: true
+    port: 3000
+    resources:
+      - database
+      - queue
+    termination:
+      grace: 45
+    test: make test
+    timeout: 120
+    deployment:
+      minimum: 50
+      maximum: 200
+  web:
+    build: .
+    command: bin/web
+    environment:
+      - SESSION_SECRET
+    port: 3000
+  worker:
+    build: ./worker
+    command: bin/worker
+    environment:
+      - ENCRYPTION_KEY
+    resources:
+      - database
+      - queue
+  metrics:
+    agent: true
+    image: awesome/metrics
+timers:
+  cleanup:
+    schedule: "0 3 * * * *"
+    command: bin/cleanup
+    service: worker
+```
+
+## Top-Level Sections
+
+<CardGroup cols={2}>
+  <Card title="environment" icon="circle-nodes" href="#environment">
+    Global environment variables shared across all services
+  </Card>
+  <Card title="appSettings" icon="sliders" href="#appsettings">
+    Application-specific settings for logging and configuration
+  </Card>
+  <Card title="resources" icon="database" href="#resources">
+    Managed databases and infrastructure resources
+  </Card>
+  <Card title="services" icon="server" href="#services">
+    Horizontally-scalable application services
+  </Card>
+  <Card title="balancers" icon="scale-balanced" href="#balancers">
+    Custom load balancers for TCP/UDP traffic
+  </Card>
+  <Card title="timers" icon="clock" href="#timers">
+    Scheduled tasks that run on cron schedules
+  </Card>
+</CardGroup>
+
+## environment
+
+The top-level `environment` section defines [Environment Variables](/configuration/environment) that are available to every [Service](/reference/primitives/app/service).
+
+```yaml
+environment:
+  - COMPANY=Convox  # has a default value of "Convox"
+  - DOCS_URL        # must be set before deployment
+```
+
+<ParamField path="environment" type="array">
+  List of environment variables in the format `NAME=value` or `NAME` (value required at deploy time)
+</ParamField>
+
+<Note>
+  Environment variables defined at the top level are available to all services. Service-level environment variables override global ones.
+</Note>
+
+See [Environment Variables](/configuration/environment) for detailed configuration options.
+
+## appSettings
+
+The `appSettings` section defines settings that apply exclusively to a particular app within the rack. These settings are independent of the global rack-level parameters.
+
+```yaml
+appSettings:
+  awsLogs:
+    cwRetention: 31
+    disableRetention: false
+```
+
+<ParamField path="awsLogs.cwRetention" type="number" default="7">
+  Number of days to retain CloudWatch Logs
+</ParamField>
+
+<ParamField path="awsLogs.disableRetention" type="boolean" default="false">
+  Disable automatic log retention cleanup
+</ParamField>
+
+See [App Settings](/configuration/app-settings) for all configuration options.
+
+## resources
+
+The `resources` section defines network-accessible resources such as databases that can be made available to services.
+
+```yaml
+resources:
+  database:
+    type: postgres
+    options:
+      storage: 200
+      version: 15
+  queue:
+    type: redis
+  cache:
+    type: memcached
+    options:
+      version: 1.6.17
+```
+
+### Available Resource Types
+
+<CodeGroup>
+```yaml PostgreSQL
+resources:
+  database:
+    type: postgres
+    options:
+      storage: 100
+      version: 15
+```
+
+```yaml MySQL
+resources:
+  database:
+    type: mysql
+    options:
+      storage: 100
+      version: 8.0.30
+```
+
+```yaml Redis
+resources:
+  cache:
+    type: redis
+    options:
+      version: 7.0
+```
+
+```yaml MariaDB
+resources:
+  database:
+    type: mariadb
+    options:
+      storage: 100
+```
+</CodeGroup>
+
+<ParamField path="resources.<name>.type" type="string" required>
+  The type of resource: `postgres`, `mysql`, `mariadb`, `redis`, `memcached`, `postgis`
+</ParamField>
+
+<ParamField path="resources.<name>.options" type="object">
+  Resource-specific configuration options (storage size, version, etc.)
+</ParamField>
+
+<ParamField path="resources.<name>.image" type="string">
+  Custom Docker image for the resource (overrides default)
+</ParamField>
+
+### AWS RDS Resources
+
+For production workloads, use managed AWS RDS resources:
+
+```yaml
+resources:
+  database:
+    type: rds-postgres
+    options:
+      storage: 100
+      class: db.t3.large
+      version: 15
+```
+
+<Warning>
+  AWS RDS resources are only available on AWS racks. When an app is deleted, RDS databases are also deleted unless `deletionProtection` is enabled.
+</Warning>
+
+See [Resource](/reference/primitives/app/resource) for detailed configuration options.
+
+## services
+
+The `services` section defines horizontally-scalable services that can be optionally placed behind a load balancer.
+
+```yaml
+services:
+  api:
+    build: .
+    command: bin/api
+    environment:
+      - ENCRYPTION_KEY
+    health: /check
+    internal: true
+    port: 3000
+    resources:
+      - database
+      - queue
+    scale:
+      count: 2-10
+      cpu: 256
+      memory: 512
+      targets:
+        cpu: 70
+        memory: 80
+    test: make test
+```
+
+### Build Configuration
+
+<Tabs>
+  <Tab title="Dockerfile">
+    ```yaml
+    services:
+      web:
+        build: .
+        port: 3000
+    ```
+  </Tab>
+  <Tab title="Custom Dockerfile">
+    ```yaml
+    services:
+      web:
+        build:
+          manifest: Dockerfile.production
+          path: ./api
+        port: 3000
+    ```
+  </Tab>
+  <Tab title="External Image">
+    ```yaml
+    services:
+      web:
+        image: nginx:latest
+        port: 80
+    ```
+  </Tab>
+</Tabs>
+
+### Essential Service Attributes
+
+<ParamField path="services.<name>.build" type="string | object">
+  Build definition. String sets path, object allows custom Dockerfile name and path
+</ParamField>
+
+<ParamField path="services.<name>.image" type="string">
+  External Docker image to use (supersedes build)
+</ParamField>
+
+<ParamField path="services.<name>.command" type="string">
+  Command to run when starting the service (overrides Dockerfile CMD)
+</ParamField>
+
+<ParamField path="services.<name>.port" type="string | number">
+  Main port for the service. Format: `3000` or `https:3000` or `grpc:50051`
+</ParamField>
+
+<ParamField path="services.<name>.ports" type="array">
+  Additional ports for internal communication. Format: `[5000, "5001/udp"]`
+</ParamField>
+
+<ParamField path="services.<name>.environment" type="array">
+  Service-specific environment variables
+</ParamField>
+
+<ParamField path="services.<name>.resources" type="array">
+  List of resources this service depends on
+</ParamField>
+
+### Health Checks
+
+<CodeGroup>
+```yaml Simple
+services:
+  web:
+    health: /health
+    port: 3000
+```
+
+```yaml Advanced
+services:
+  web:
+    health:
+      grace: 10
+      interval: 5
+      path: /health
+      timeout: 3
+    port: 3000
+```
+
+```yaml gRPC
+services:
+  api:
+    port: grpc:50051
+    grpcHealthEnabled: true
+    health:
+      grace: 20
+      interval: 10
+```
+</CodeGroup>
+
+See [Health Checks](/configuration/health-checks) for detailed configuration.
+
+### Scaling Configuration
+
+<CodeGroup>
+```yaml Static
+services:
+  web:
+    scale:
+      count: 3
+      cpu: 256
+      memory: 512
+```
+
+```yaml Autoscaling
+services:
+  web:
+    scale:
+      count: 2-10
+      cpu: 256
+      memory: 512
+      targets:
+        cpu: 70
+        memory: 80
+```
+
+```yaml GPU
+services:
+  ml:
+    scale:
+      gpu:
+        count: 1
+        vendor: nvidia
+      cpu: 1024
+      memory: 4096
+```
+</CodeGroup>
+
+### Advanced Service Options
+
+<ParamField path="services.<name>.internal" type="boolean" default="false">
+  Make service accessible only inside the rack
+</ParamField>
+
+<ParamField path="services.<name>.agent" type="boolean" default="false">
+  Run as a daemon on every node (DaemonSet)
+</ParamField>
+
+<ParamField path="services.<name>.singleton" type="boolean" default="false">
+  Prevent multiple instances during deployments
+</ParamField>
+
+<ParamField path="services.<name>.sticky" type="boolean" default="false">
+  Enable session affinity (sticky sessions)
+</ParamField>
+
+<ParamField path="services.<name>.timeout" type="number" default="60">
+  Request timeout in seconds
+</ParamField>
+
+<ParamField path="services.<name>.drain" type="number">
+  Connection drain timeout in seconds (v2 racks only)
+</ParamField>
+
+<ParamField path="services.<name>.termination.grace" type="number" default="30">
+  Graceful shutdown timeout in seconds
+</ParamField>
+
+<ParamField path="services.<name>.test" type="string">
+  Command to run for testing (used with `convox test`)
+</ParamField>
+
+<ParamField path="services.<name>.annotations" type="array">
+  Kubernetes annotations for pods and service accounts
+</ParamField>
+
+<ParamField path="services.<name>.domain" type="string | array">
+  Custom domain(s) to route to this service
+</ParamField>
+
+<ParamField path="services.<name>.whitelist" type="string">
+  Comma-delimited CIDR ranges to allow access
+</ParamField>
+
+See [Service](/reference/primitives/app/service) for the complete reference.
+
+## balancers
+
+The `balancers` section defines custom load balancers for exposing arbitrary TCP or UDP ports.
+
+```yaml
+balancers:
+  custom:
+    service: web
+    ports:
+      5000: 5001
+      6000: 6001
+services:
+  web:
+    port: 3000
+    ports:
+      - 5001
+      - 6001
+```
+
+<ParamField path="balancers.<name>.service" type="string" required>
+  Name of the service to receive traffic
+</ParamField>
+
+<ParamField path="balancers.<name>.ports" type="object" required>
+  Port mappings in format `externalPort: internalPort`
+</ParamField>
+
+<ParamField path="balancers.<name>.annotations" type="array">
+  Kubernetes annotations for the load balancer
+</ParamField>
+
+<ParamField path="balancers.<name>.whitelist" type="array">
+  CIDR ranges to limit inbound traffic
+</ParamField>
+
+### UDP Support
+
+```yaml
+balancers:
+  custom:
+    service: web
+    ports:
+      5000:
+        protocol: UDP
+        port: 3001
+services:
+  web:
+    port: 3000
+    ports:
+      - 3001/udp
+```
+
+<Warning>
+  Custom balancers can only use all TCP or all UDP ports, not mixed. SSL termination is not provided on custom balancers.
+</Warning>
+
+See [Load Balancers](/configuration/load-balancers) for detailed configuration.
+
+## timers
+
+The `timers` section defines processes that run periodically on a cron schedule.
+
+```yaml
+timers:
+  cleanup:
+    schedule: "0 3 * * *"
+    command: bin/cleanup
+    service: worker
+    concurrency: forbid
+  hourly-report:
+    schedule: "0 * * * *"
+    command: bin/generate-report
+    service: worker
+    parallelCount: 5
+```
+
+<ParamField path="timers.<name>.schedule" type="string" required>
+  Cron expression for when to run (all times are UTC)
+</ParamField>
+
+<ParamField path="timers.<name>.command" type="string" required>
+  Command to execute when the timer runs
+</ParamField>
+
+<ParamField path="timers.<name>.service" type="string" required>
+  Service to use as the template for the timer process
+</ParamField>
+
+<ParamField path="timers.<name>.concurrency" type="string" default="allow">
+  How to handle concurrent executions: `allow` or `forbid`
+</ParamField>
+
+<ParamField path="timers.<name>.parallelCount" type="number" default="1">
+  Number of parallel replicas to run (each gets unique TIMER_INDEX)
+</ParamField>
+
+<ParamField path="timers.<name>.annotations" type="array">
+  Kubernetes annotations for timer pods
+</ParamField>
+
+### Cron Expression Format
+
+```
+.----------------- minute (0 - 59)
+|  .-------------- hour (0 - 23)
+|  |  .----------- day-of-month (1 - 31)
+|  |  |  .-------- month (1 - 12)
+|  |  |  |  .----- day-of-week (0 - 6) (Sunday=0)
+|  |  |  |  |
+*  *  *  *  *
+```
+
+<Note>
+  Timers can run against services scaled to zero, making them ideal for batch jobs and scheduled tasks.
+</Note>
+
+See [Timer](/reference/primitives/app/timer) for the complete reference.
+
+## Variable Interpolation
+
+You can use environment variables to add dynamic configuration to your `convox.yml`:
+
+```yaml
+services:
+  web:
+    domain: ${HOST}
+    health: ${HEALTH_CHECK_PATH}
+    scale:
+      count: ${SCALE_COUNT}
+```
+
+<Note>
+  Interpolated variables must be set in your environment before deployment. They are resolved at build/deploy time, not runtime.
+</Note>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Start Simple" icon="seedling">
+    Begin with minimal configuration and add complexity as needed
+  </Card>
+  <Card title="Use Environment Variables" icon="key">
+    Keep secrets out of convox.yml using environment variables
+  </Card>
+  <Card title="Health Checks" icon="heart-pulse">
+    Always configure health checks for services with load balancers
+  </Card>
+  <Card title="Resource Limits" icon="gauge">
+    Set appropriate CPU and memory limits based on actual usage
+  </Card>
+</CardGroup>
+
+## Related Documentation
+
+<CardGroup cols={3}>
+  <Card title="Environment Variables" icon="circle-nodes" href="/configuration/environment">
+    Managing application secrets and configuration
+  </Card>
+  <Card title="Load Balancers" icon="scale-balanced" href="/configuration/load-balancers">
+    Configuring HTTP, TCP, and UDP load balancing
+  </Card>
+  <Card title="Health Checks" icon="heart-pulse" href="/configuration/health-checks">
+    Readiness, liveness, and startup probes
+  </Card>
+  <Card title="Service Discovery" icon="network-wired" href="/configuration/service-discovery">
+    Internal service communication
+  </Card>
+  <Card title="Volumes" icon="hard-drive" href="/configuration/volumes">
+    Persistent and temporary storage
+  </Card>
+  <Card title="App Parameters" icon="sliders" href="/configuration/app-parameters">
+    Cloud-specific application settings
+  </Card>
+</CardGroup>

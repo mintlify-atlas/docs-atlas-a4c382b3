@@ -1,0 +1,112 @@
+---
+title: Installation Overview
+description: Get started with Convox by installing the CLI and choosing between development or production racks
+---
+
+Convox is an open-source multicloud Platform-as-a-Service (PaaS) built on Kubernetes. To get started, you'll need to install the Convox CLI and set up a Rack.
+
+## What is a Rack?
+
+A Rack is a Convox installation that provides the platform infrastructure for running your applications. There are two types of Racks:
+
+<CardGroup cols={2}>
+  <Card title="Development Rack" icon="laptop-code" href="/installation/development-rack">
+    Run locally on your workstation for development and testing
+  </Card>
+  <Card title="Production Rack" icon="cloud" href="/installation/production-rack">
+    Deploy to cloud providers like AWS, GCP, Azure, or Digital Ocean
+  </Card>
+</CardGroup>
+
+## Installation Steps
+
+<Steps>
+  <Step title="Install the CLI">
+    Start by installing the Convox command-line interface on your local machine.
+    
+    [Install Convox CLI](/installation/cli)
+  </Step>
+  
+  <Step title="Choose Your Rack Type">
+    Decide whether you need a development rack (local) or production rack (cloud).
+    
+    - **Development Rack**: Perfect for local development, testing, and experimentation
+    - **Production Rack**: For staging and production environments in the cloud
+  </Step>
+  
+  <Step title="Install Your Rack">
+    Follow the installation guide for your chosen rack type:
+    
+    - [Development Rack Installation](/installation/development-rack)
+    - [Production Rack Installation](/installation/production-rack)
+  </Step>
+  
+  <Step title="Verify Installation">
+    Confirm your rack is running correctly:
+    
+    ```bash
+    convox racks
+    convox rack -r <rack-name>
+    ```
+  </Step>
+</Steps>
+
+## Quick Start
+
+If you're new to Convox, we recommend:
+
+1. **Start with a Development Rack** - Install a local rack to familiarize yourself with Convox
+2. **Deploy a Sample App** - Test your setup with a simple application
+3. **Move to Production** - When ready, install a production rack on your cloud provider
+
+<Note>
+  The Convox Web Console at [console.convox.com](https://console.convox.com) provides the easiest way to install and manage production racks with a visual interface.
+</Note>
+
+## System Requirements
+
+### Development Rack
+
+- **macOS** (Intel or M1/ARM64) or **Ubuntu 22.04 LTS**
+- Docker Desktop (macOS) or Docker (Linux)
+- Minikube 1.29.0 or later
+- Terraform
+- 4GB+ RAM available
+- 20GB+ disk space
+
+### Production Rack
+
+- Convox CLI installed locally
+- Cloud provider account (AWS, GCP, Azure, or Digital Ocean)
+- Cloud provider CLI tools
+- Terraform (for CLI installations)
+- Appropriate cloud permissions/credentials
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="CLI Installation" icon="terminal" href="/installation/cli">
+    Install the Convox command-line interface
+  </Card>
+  <Card title="Development Rack" icon="laptop-code" href="/installation/development-rack">
+    Set up a local development environment
+  </Card>
+  <Card title="Production Rack" icon="cloud" href="/installation/production-rack">
+    Deploy to your cloud provider
+  </Card>
+  <Card title="Getting Started" icon="rocket" href="/reference/primitives/getting-started/introduction">
+    Learn Convox fundamentals
+  </Card>
+</CardGroup>
+
+## Support
+
+If you encounter issues during installation:
+
+- Check the [troubleshooting sections](/installation/production-rack) in provider-specific guides
+- Visit the [Convox documentation](https://docs.convox.com)
+- Join the Convox community for support
+
+<Tip>
+  For production installations, using the [Convox Web Console](https://console.convox.com) provides automatic updates, monitoring, and easier team collaboration.
+</Tip>

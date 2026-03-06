@@ -1,0 +1,649 @@
+---
+title: "Troubleshooting Guide"
+description: "Common issues and solutions for Convox deployments and operations"
+---
+
+# Troubleshooting Guide
+
+This guide covers common issues you may encounter when working with Convox and their solutions.
+
+## Installation Issues
+
+### Local Rack Installation Fails
+
+<Accordion title="Port Conflicts">
+  **Problem:** Installation fails with port binding errors.
+  
+  **Symptoms:**
+  - Error messages about port 53, 80, or 443 already in use
+  - Cannot start local rack services
+  
+  **Solutions:**
+  
+  <Steps>
+    <Step title="Check for conflicting services">
+      ```bash
+      # Check port 53 (DNS)
+      sudo lsof -i :53
+      
+      # Check port 80 (HTTP)
+      sudo lsof -i :80
+      
+      # Check port 443 (HTTPS)
+      sudo lsof -i :443
+      ```
+    </Step>
+    
+    <Step title="Stop conflicting services">
+      Temporarily stop the conflicting service during installation.
+      
+      Common conflicts:
+      - **Port 53:** Local DNS services (dnsmasq, systemd-resolved)
+      - **Port 80/443:** Web servers (Apache, nginx)
+    </Step>
+    
+    <Step title="Retry installation">
+      After stopping conflicting services, retry the rack installation.
+    </Step>
+  </Steps>
+</Accordion>
+
+<Accordion title="Insufficient Resources">
+  **Problem:** Docker/Kubernetes doesn't have enough resources.
+  
+  **Symptoms:**
+  - Installation hangs or times out
+  - Pods fail to start
+  - "Insufficient memory" or "Insufficient CPU" errors
+  
+  **Solutions:**
+  
+  Increase Docker resource allocation:
+  - **Memory:** Minimum 4GB, recommended 8GB
+  - **CPU:** Minimum 2 cores, recommended 4 cores
+  - **Disk:** At least 20GB free space
+  
+  Configure in Docker Desktop:
+  1. Open Docker Desktop settings
+  2. Go to Resources
+  3. Adjust Memory and CPU sliders
+  4. Click Apply & Restart
+</Accordion>
+
+### Cloud Rack Installation Fails
+
+<Accordion title="Resource Quota Exceeded">
+  **Problem:** Installation fails due to cloud provider limits.
+  
+  **Symptoms:**
+  - Error messages about quota or limits
+  - Cannot create VPCs, IP addresses, or instances
+  
+  **Solutions:**
+  
+  <Steps>
+    <Step title="Check provider status">
+      Verify there are no ongoing issues:
+      - [AWS Status](https://status.aws.amazon.com/)
+      - [Azure Status](https://status.azure.com/en-us/status)
+      - [Digital Ocean Status](https://status.digitalocean.com/)
+      - [GCP Status](https://status.cloud.google.com/)
+    </Step>
+    
+    <Step title="Review quota limits">
+      Check your account limits for:
+      - IP addresses
+      - CPU/compute allowances
+      - VPCs or virtual networks
+      - Load balancers
+    </Step>
+    
+    <Step title="Request quota increase">
+      If near limits, request an increase from your cloud provider.
+    </Step>
+    
+    <Step title="Retry or continue installation">
+      ```bash
+      convox rack update -r <rackname>
+      ```
+    </Step>
+  </Steps>
+</Accordion>
+
+<Accordion title="Failed Installation Recovery">
+  **Problem:** Rack installation failed and left resources in an inconsistent state.
+  
+  **Solutions:**
+  
+  Try continuing the installation:
+  ```bash
+  convox rack update -r <rackname>
+  ```
+  
+  If that doesn't work, uninstall and reinstall:
+  ```bash
+  convox rack uninstall <rackname>
+  # Wait for cleanup to complete
+  convox rack install <provider> <rackname> [options]
+  ```
+</Accordion>
+
+## Deployment Issues
+
+### Build Failures
+
+<Accordion title="Check Build Logs">
+  View detailed build logs to identify the issue:
+  
+  ```bash
+  convox builds -a myapp
+  convox builds logs <build-id> -a myapp
+  ```
+  
+  Common build errors:
+  - **Dependency installation fails:** Check package versions and availability
+  - **Dockerfile syntax errors:** Validate Dockerfile syntax
+  - **Build timeout:** Increase timeout or optimize build steps
+  - **Out of memory:** Add build node or optimize build process
+</Accordion>
+
+<Accordion title="Docker Build Issues">
+  **Common problems:**
+  
+  **Invalid base image:**
+  ```dockerfile
+  # Wrong - image doesn't exist
+  FROM node:99.0.0
+  
+  # Correct
+  FROM node:20
+  ```
+  
+  **Copy failures:**
+  ```dockerfile
+  # Wrong - file doesn't exist
+  COPY missing-file.txt /app/
+  
+  # Correct - check file exists first
+  COPY package.json /app/
+  ```
+  
+  **Build context too large:**
+  ```bash
+  # Add .dockerignore to exclude unnecessary files
+  echo "node_modules" >> .dockerignore
+  echo ".git" >> .dockerignore
+  ```
+</Accordion>
+
+### Deployment Failures
+
+<Accordion title="Health Check Failures">
+  **Problem:** Deployment fails because health checks don't pass.
+  
+  **Symptoms:**
+  ```
+  2024-03-06T14:17:17Z system/k8s/web-56f5d77d7-6gx8z Readiness probe failed: HTTP probe failed with statuscode: 404
+  ```
+  
+  **Solutions:**
+  
+  <Steps>
+    <Step title="Check logs for startup errors">
+      ```bash
+      convox logs -a myapp --service web --since 5m
+      ```
+    </Step>
+    
+    <Step title="Verify health check endpoint">
+      Ensure your app responds to the health check path:
+      
+      ```yaml
+      # convox.yml
+      services:
+        web:
+          health: /health  # Must return 200-399
+      ```
+      
+      Test locally:
+      ```bash
+      curl http://localhost:3000/health
+      ```
+    </Step>
+    
+    <Step title="Increase grace period">
+      If your app needs more time to start:
+      
+      ```yaml
+      services:
+        web:
+          health:
+            path: /health
+            grace: 30  # Increased from default 5
+            timeout: 5
+      ```
+    </Step>
+    
+    <Step title="Check application logs">
+      Look for startup errors or missing dependencies:
+      ```bash
+      convox logs -a myapp --filter "ERROR"
+      ```
+    </Step>
+  </Steps>
+  
+  <Warning>
+    Deployments with failing health checks will automatically roll back to the previous release.
+  </Warning>
+</Accordion>
+
+<Accordion title="Image Pull Failures">
+  **Problem:** Cannot pull container image.
+  
+  **Symptoms:**
+  ```
+  Failed to pull image: authentication required
+  ErrImagePull
+  ImagePullBackOff
+  ```
+  
+  **Solutions:**
+  
+  1. **For private registries:**
+     ```bash
+     convox registries add <hostname> <username> <password> -a myapp
+     ```
+  
+  2. **For public images:**
+     - Verify image name and tag are correct
+     - Check if registry is accessible
+     - Look for rate limiting issues
+  
+  3. **Check build status:**
+     ```bash
+     convox builds -a myapp
+     ```
+</Accordion>
+
+<Accordion title="Resource Constraints">
+  **Problem:** Pods cannot be scheduled due to insufficient resources.
+  
+  **Symptoms:**
+  ```
+  0/3 nodes available: insufficient cpu
+  0/3 nodes available: insufficient memory
+  ```
+  
+  **Solutions:**
+  
+  <Steps>
+    <Step title="Check current resource usage">
+      ```bash
+      convox ps -a myapp
+      ```
+    </Step>
+    
+    <Step title="Reduce resource requests">
+      ```yaml
+      # convox.yml
+      services:
+        web:
+          scale:
+            cpu: 256      # Reduced from 1024
+            memory: 512   # Reduced from 2048
+      ```
+    </Step>
+    
+    <Step title="Scale up infrastructure">
+      ```bash
+      # Increase node size or count
+      convox rack params set node_type=t3.large -r myrack
+      ```
+    </Step>
+  </Steps>
+</Accordion>
+
+### SSL Certificate Issues
+
+<Accordion title="Certificate Not Provisioning">
+  **Problem:** SSL certificate shows as "Kubernetes Ingress Controller Fake Certificate."
+  
+  **Cause:** DNS not properly configured for your domain.
+  
+  **Solutions:**
+  
+  <Steps>
+    <Step title="Get router address">
+      ```bash
+      convox rack -r myrack
+      ```
+      
+      Note the Router address (e.g., `router.us-east-1.convox.site`)
+    </Step>
+    
+    <Step title="Verify DNS records">
+      ```bash
+      dig yourdomain.com
+      ```
+      
+      Should return a CNAME or A record pointing to the router address.
+    </Step>
+    
+    <Step title="Update DNS if needed">
+      Add CNAME record:
+      ```
+      yourdomain.com CNAME router.us-east-1.convox.site
+      ```
+    </Step>
+    
+    <Step title="Wait for DNS propagation">
+      DNS changes can take up to 24 hours to propagate globally, but usually complete within 1-2 hours.
+    </Step>
+    
+    <Step title="Trigger certificate refresh">
+      Redeploy your application:
+      ```bash
+      convox deploy -a myapp
+      ```
+    </Step>
+  </Steps>
+  
+  <Note>
+    LetsEncrypt certificates are automatically provisioned when DNS is correctly configured.
+  </Note>
+</Accordion>
+
+## Application Cannot Be Accessed
+
+### Service Not Responding
+
+<Steps>
+  <Step title="Check service endpoints">
+    ```bash
+    convox services -a myapp
+    ```
+    
+    Verify the domain and ports are correct.
+  </Step>
+  
+  <Step title="Verify pods are running">
+    ```bash
+    convox ps -a myapp
+    ```
+    
+    All processes should show status "running."
+  </Step>
+  
+  <Step title="Check application logs">
+    ```bash
+    convox logs -a myapp --since 10m
+    ```
+    
+    Look for:
+    - Startup errors
+    - Binding errors
+    - Crashed processes
+  </Step>
+  
+  <Step title="Test health endpoint">
+    If you have health checks configured, test the endpoint:
+    ```bash
+    convox run web curl http://localhost:3000/health -a myapp
+    ```
+  </Step>
+</Steps>
+
+<CardGroup cols={2}>
+  <Card title="Check Logs" icon="file-lines">
+    Application logs often contain the root cause of access issues.
+  </Card>
+  
+  <Card title="Verify DNS" icon="globe">
+    DNS misconfigurations are a common cause of inaccessible applications.
+  </Card>
+  
+  <Card title="Test Health Checks" icon="heart-pulse">
+    Failed health checks prevent traffic from reaching your app.
+  </Card>
+  
+  <Card title="Review Security Groups" icon="shield">
+    Firewall rules may block incoming traffic.
+  </Card>
+</CardGroup>
+
+## Performance Issues
+
+### Application Restarts Frequently
+
+<Accordion title="Check for OOMKilled Errors">
+  **Problem:** Application is killed due to out-of-memory errors.
+  
+  **Check logs:**
+  ```bash
+  convox logs -a myapp --filter "OOMKilled"
+  ```
+  
+  **Solutions:**
+  
+  1. **Increase memory limits:**
+     ```yaml
+     # convox.yml
+     services:
+       web:
+         scale:
+           memory: 1024  # Increased from 512
+     ```
+  
+  2. **Investigate memory leaks:**
+     ```bash
+     # Connect to running process
+     convox exec web bash -a myapp
+     
+     # Check memory usage
+     ps aux | sort -k4 -r | head -10
+     ```
+  
+  3. **Profile your application:**
+     Use language-specific profiling tools to identify leaks.
+</Accordion>
+
+<Accordion title="Liveness Probe Failures">
+  **Problem:** Liveness checks fail and restart the container.
+  
+  **Check configuration:**
+  ```yaml
+  services:
+    web:
+      liveness:
+        path: /live
+        grace: 30           # Increase if needed
+        interval: 10
+        failureThreshold: 5  # Increase to be less sensitive
+  ```
+  
+  <Warning>
+    Liveness probes should be configured conservatively to avoid unnecessary restarts.
+  </Warning>
+</Accordion>
+
+### Slow Response Times
+
+<Steps>
+  <Step title="Check CPU usage">
+    ```bash
+    # View metrics in Console or check logs
+    convox logs -a myapp --filter "slow"
+    ```
+  </Step>
+  
+  <Step title="Increase CPU allocation">
+    ```yaml
+    services:
+      web:
+        scale:
+          cpu: 1024  # Increase from 256
+    ```
+  </Step>
+  
+  <Step title="Scale horizontally">
+    ```yaml
+    services:
+      web:
+        scale:
+          count: 3  # Add more instances
+    ```
+  </Step>
+  
+  <Step title="Review application code">
+    Use APM tools to identify slow database queries or N+1 problems.
+  </Step>
+</Steps>
+
+## CLI Issues
+
+### Commands Take Too Long
+
+**Problem:** CLI commands are slow to respond.
+
+**Solution for local Kubernetes issues:**
+```bash
+export CONVOX_LOCAL=disable
+```
+
+This prevents the CLI from interrogating invalid local Kubernetes endpoints.
+
+### Authentication Failures
+
+<Steps>
+  <Step title="Check login status">
+    ```bash
+    convox rack
+    ```
+  </Step>
+  
+  <Step title="Re-authenticate">
+    ```bash
+    convox login console.convox.com
+    ```
+  </Step>
+  
+  <Step title="Verify rack access">
+    ```bash
+    convox racks
+    ```
+  </Step>
+</Steps>
+
+## Getting Help
+
+### Diagnostic Information
+
+When requesting support, gather this information:
+
+<CodeGroup>
+```bash Application Info
+# App status
+convox ps -a myapp
+
+# Recent logs
+convox logs -a myapp --since 1h --no-follow > app-logs.txt
+
+# Build history
+convox builds -a myapp
+```
+
+```bash Rack Info
+# Rack details
+convox rack -r myrack
+
+# Rack parameters
+convox rack params -r myrack
+
+# Rack logs
+convox rack logs -r myrack --since 1h --no-follow > rack-logs.txt
+```
+
+```bash Service Info
+# Services and endpoints
+convox services -a myapp
+
+# Environment variables
+convox env -a myapp
+
+# Resources
+convox resources -a myapp
+```
+</CodeGroup>
+
+### Support Channels
+
+<CardGroup cols={2}>
+  <Card title="Documentation Search" icon="magnifying-glass">
+    Use the search box in the sidebar to find relevant docs.
+  </Card>
+  
+  <Card title="Stack Overflow" icon="stack-overflow">
+    Search or post questions with the `convox` tag.
+  </Card>
+  
+  <Card title="Console Support" icon="ticket">
+    Open a support ticket in the Convox Console.
+  </Card>
+  
+  <Card title="GitHub Issues" icon="github">
+    Report bugs or request features on GitHub.
+  </Card>
+</CardGroup>
+
+## Best Practices for Troubleshooting
+
+<Steps>
+  <Step title="Check the logs first">
+    Most issues are revealed in application or rack logs:
+    ```bash
+    convox logs -a myapp --since 30m
+    ```
+  </Step>
+  
+  <Step title="Verify basic connectivity">
+    Ensure services are running and accessible:
+    ```bash
+    convox ps -a myapp
+    convox services -a myapp
+    ```
+  </Step>
+  
+  <Step title="Test in isolation">
+    Use `convox run` to test commands in a controlled environment:
+    ```bash
+    convox run web bash -a myapp
+    ```
+  </Step>
+  
+  <Step title="Compare with working state">
+    If something broke after a change, compare configurations:
+    ```bash
+    convox releases -a myapp
+    convox releases info <previous-release> -a myapp
+    ```
+  </Step>
+  
+  <Step title="Rollback if needed">
+    Quickly recover by rolling back to a working release:
+    ```bash
+    convox releases promote <release-id> -a myapp
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+  Keep a record of changes you make to configurations, parameters, and deployments. This makes it easier to identify what changed when issues occur.
+</Tip>
+
+## Related Documentation
+
+- [View Application Logs](/management/logs)
+- [Run One-Off Commands](/management/run)
+- [Monitoring & Alerting](/management/monitoring)
+- [Health Checks Configuration](/configuration/health-checks)
+- [Rack Parameters](/management/cli-rack-management)

@@ -1,0 +1,218 @@
+---
+title: build
+description: Create builds from your application source code
+---
+
+The `build` command creates a container build from your application source code. It packages your code, uploads it to the rack, and builds Docker images for all services defined in your `convox.yml`.
+
+## Usage
+
+```bash
+convox build [dir]
+```
+
+### Arguments
+
+<ParamField path="dir" type="string" default=".">
+  Directory containing the application source code (defaults to current directory)
+</ParamField>
+
+## Flags
+
+<ParamField path="--app" type="string" default="-a">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string" default="-r">
+  Rack name
+</ParamField>
+
+<ParamField path="--description" type="string">
+  Description for the build
+</ParamField>
+
+<ParamField path="--manifest" type="string">
+  Path to manifest file (default: convox.yml)
+</ParamField>
+
+<ParamField path="--no-cache" type="boolean">
+  Build without using cache
+</ParamField>
+
+<ParamField path="--id" type="boolean">
+  Output only the release ID
+</ParamField>
+
+<ParamField path="--build-args" type="string">
+  Build-time environment variables (can be specified multiple times)
+</ParamField>
+
+<ParamField path="--development" type="boolean">
+  Create a development build
+</ParamField>
+
+<ParamField path="--external" type="boolean">
+  Build externally using local Docker
+</ParamField>
+
+## Examples
+
+### Basic Build
+
+Create a build from the current directory:
+
+```bash
+$ convox build
+Packaging source... OK
+Uploading source... OK
+Starting build... OK
+Authenticating https://index.docker.io/v1/: Login Succeeded
+Authenticating 1234567890.dkr.ecr.us-east-1.amazonaws.com: Login Succeeded
+Building: .
+Step 1/10 : FROM node:16-alpine
+...
+Running: docker tag convox/myapp:web.BABCDEFGHI 1234567890.dkr.ecr.us-east-1.amazonaws.com/myapp:web.BABCDEFGHI
+Running: docker push 1234567890.dkr.ecr.us-east-1.amazonaws.com/myapp:web.BABCDEFGHI
+Build:   BABCDEFGHI
+Release: RABCDEFGHI
+```
+
+### Build with Description
+
+Add a custom description to track your builds:
+
+```bash
+$ convox build --description "Fix login bug"
+Packaging source... OK
+Uploading source... OK
+Starting build... OK
+...
+Build:   BABCDEFGHI
+Release: RABCDEFGHI
+```
+
+### Build Without Cache
+
+Force a complete rebuild without using cached layers:
+
+```bash
+$ convox build --no-cache
+Packaging source... OK
+Uploading source... OK
+Starting build... OK
+...
+Build:   BABCDEFGHI
+Release: RABCDEFGHI
+```
+
+<Note>
+  The `--no-cache` flag is useful when you need to ensure all dependencies are fetched fresh or when troubleshooting build issues.
+</Note>
+
+### Build with Build Arguments
+
+Pass build-time environment variables to your Docker build:
+
+```bash
+$ convox build --build-args "NODE_ENV=production" --build-args "API_VERSION=v2"
+Packaging source... OK
+Uploading source... OK
+Starting build... OK
+...
+Build:   BABCDEFGHI
+Release: RABCDEFGHI
+```
+
+<Note>
+  Build args are only available during the build process and are not persisted in the final image. For runtime configuration, use environment variables with `convox env set`.
+</Note>
+
+### Build from Specific Directory
+
+Build from a directory other than the current one:
+
+```bash
+$ convox build /path/to/myapp
+Packaging source... OK
+Uploading source... OK
+Starting build... OK
+...
+Build:   BABCDEFGHI
+Release: RABCDEFGHI
+```
+
+### Get Only Release ID
+
+Output only the release ID for use in scripts:
+
+```bash
+$ convox build --id
+RABCDEFGHI
+```
+
+## Build Process
+
+The build process follows these steps:
+
+1. **Package Source**: Creates a tarball of your application directory
+2. **Upload Source**: Uploads the source tarball to the rack
+3. **Start Build**: Initiates the build process on the rack
+4. **Authenticate**: Authenticates with Docker registries
+5. **Build Images**: Builds Docker images for each service
+6. **Push Images**: Pushes built images to the registry
+7. **Create Release**: Creates a new release with the built images
+
+## Build Output
+
+The command streams build logs in real-time, showing:
+
+- Dockerfile execution steps
+- Build progress and status
+- Image tagging and pushing
+- Final build and release IDs
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="Deploy" icon="rocket" href="/cli/deploy">
+    Build and promote in one command
+  </Card>
+  <Card title="Builds" icon="list" href="/cli/apps">
+    View build history
+  </Card>
+</CardGroup>
+
+## Common Workflows
+
+### Build and Deploy
+
+For a combined build and deploy, use the `deploy` command:
+
+```bash
+convox deploy
+```
+
+### Build for Testing
+
+Create a build to test without deploying:
+
+```bash
+$ BUILD=$(convox build --id)
+$ echo "Testing build $BUILD"
+$ convox run web --release $BUILD npm test
+```
+
+### Troubleshooting Builds
+
+If a build fails:
+
+1. Check the build logs for error messages
+2. Try building with `--no-cache` to eliminate cache issues
+3. Verify your `convox.yml` and Dockerfile syntax
+4. Ensure all required files are present and not in `.dockerignore`
+
+## Version Requirements
+
+<ParamField path="Build args" type="feature">
+  Requires Convox CLI and rack version >= 3.7.2
+</ParamField>

@@ -1,97 +1,111 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Convox Platform"
+description: "Open-source multicloud Platform as a Service built on Kubernetes"
 ---
 
-## Setting up
+<div className="bg-gradient-to-r from-[#003b47] to-[#144c5d] text-white p-12 rounded-lg mb-8">
+  <h1 className="text-5xl font-bold mb-4">Deploy anywhere with confidence</h1>
+  <p className="text-xl text-[#7ad8e6] mb-6">
+    Convox is an open-source Platform as a Service that runs on your own infrastructure. 
+    Deploy to AWS, GCP, Azure, or Digital Ocean with the same simple workflow.
+  </p>
+</div>
 
-Get your documentation site up and running in minutes.
+## Why Convox?
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+Convox simplifies cloud infrastructure management by providing a consistent deployment experience across multiple cloud providers. Built on Kubernetes, it combines the power of modern orchestration with the simplicity of a traditional PaaS.
 
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Multicloud by Design" icon="cloud" href="/cloud/aws">
+    Deploy to AWS, Google Cloud, Azure, or Digital Ocean using the same configuration
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Infrastructure as Code" icon="code" href="/configuration/convox-yml">
+    Define your entire application stack in a simple convox.yml manifest
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Automatic Scaling" icon="chart-line" href="/deployment/scaling">
+    Auto-scale your applications based on CPU, memory, or custom metrics
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Zero-Downtime Deployments" icon="arrows-rotate" href="/deployment/rolling-updates">
+    Deploy changes with automatic health checks and instant rollbacks
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Get Started
 
-Everything you need to create world-class documentation.
+<Steps>
+  <Step title="Install the CLI">
+    Install the Convox CLI on your local machine to manage racks and applications
+    
+    <CodeGroup>
+    ```bash macOS
+    brew install convox
+    ```
+    
+    ```bash Linux
+    curl -L https://convox.com/cli/linux/convox -o /tmp/convox
+    sudo mv /tmp/convox /usr/local/bin/convox
+    sudo chmod +x /usr/local/bin/convox
+    ```
+    
+    ```bash Windows
+    # Download from https://github.com/convox/convox/releases
+    ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="Install a Rack">
+    Create your first Rack on your preferred cloud provider
+    
+    ```bash
+    convox rack install aws rack-name
+    ```
+  </Step>
+  
+  <Step title="Deploy Your App">
+    Deploy any application with a simple command
+    
+    ```bash
+    convox deploy
+    ```
+  </Step>
+</Steps>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## Core Features
 
-## Need inspiration?
+<CardGroup cols={3}>
+  <Card title="Release Management" icon="rocket" href="/reference/primitives/release">
+    Track and manage application releases
+  </Card>
+  <Card title="Service Discovery" icon="network-wired" href="/configuration/service-discovery">
+    Automatic DNS-based service discovery
+  </Card>
+  <Card title="Load Balancing" icon="scale-balanced" href="/configuration/load-balancers">
+    Automatic SSL and intelligent load balancing
+  </Card>
+  <Card title="Managed Resources" icon="database" href="/reference/resources/overview">
+    Postgres, MySQL, Redis, and more
+  </Card>
+  <Card title="Scheduled Jobs" icon="clock" href="/reference/primitives/timer">
+    Run cron jobs alongside your services
+  </Card>
+  <Card title="One-off Commands" icon="terminal" href="/management/run">
+    Execute tasks in your production environment
+  </Card>
+</CardGroup>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+## Popular Resources
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Guide" icon="bolt" href="/quickstart">
+    Get up and running in under 10 minutes
+  </Card>
+  <Card title="convox.yml Reference" icon="file-code" href="/configuration/convox-yml">
+    Complete manifest configuration guide
+  </Card>
+  <Card title="CLI Commands" icon="rectangle-terminal" href="/cli/overview">
+    Full command-line reference
+  </Card>
+  <Card title="Architecture Overview" icon="diagram-project" href="/architecture">
+    Understand how Convox works
+  </Card>
+</CardGroup>

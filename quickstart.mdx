@@ -1,80 +1,358 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Deploy your first application on Convox in under 10 minutes"
 ---
 
-## Get started in three steps
+# Quickstart
 
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+This guide will walk you through installing Convox, setting up your first Rack, and deploying a sample application. You'll learn the core workflow that you'll use for all your deployments.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+This tutorial uses Convox Cloud Console for the easiest getting started experience. You can also install Racks via the CLI - see [Production Rack Installation](/installation/production-rack) for details.
 </Note>
+
+## Prerequisites
+
+Before you begin, you'll need:
+
+- A cloud provider account (AWS, Google Cloud, Digital Ocean, or Azure)
+- Admin-level permissions in your cloud account
+- Git installed on your local machine
+
+## Step 1: Create a Convox Account
+
+<Steps>
+  <Step title="Sign up for Convox">
+    Create a free account at [console.convox.com/signup](https://console.convox.com/signup). We recommend using your work email address.
+  </Step>
+  
+  <Step title="Create an Organization">
+    On first login, you'll be prompted to create an Organization. This is a workspace where you can invite team members and manage your Racks and applications.
+    
+    You can rename your Organization anytime from the Console Settings page.
+  </Step>
+</Steps>
+
+## Step 2: Connect Your Cloud Provider
+
+<Steps>
+  <Step title="Navigate to Integrations">
+    In the Convox Console, click **Integrations** in the sidebar.
+  </Step>
+  
+  <Step title="Add Runtime Integration">
+    Click the **+** button in the **Runtime** section and select your cloud provider.
+  </Step>
+  
+  <Step title="Configure Permissions">
+    Follow the provider-specific instructions to create a security role or service account for Convox. This allows Convox to provision infrastructure on your behalf.
+    
+    <Warning>
+    Ensure you have administrator-level permissions in your cloud account to create the required IAM roles or service accounts.
+    </Warning>
+  </Step>
+</Steps>
+
+## Step 3: Install a Rack
+
+A Rack is your Convox platform installation. It's the foundation that hosts your applications.
+
+<Steps>
+  <Step title="Navigate to Racks">
+    Click **Racks** in the Convox Console sidebar.
+  </Step>
+  
+  <Step title="Create a New Rack">
+    Click the **Install** button and select the Runtime Integration you just created.
+  </Step>
+  
+  <Step title="Configure Your Rack">
+    - **Name**: Choose a name like `dev`, `staging`, or `production`
+    - **Region**: Select a cloud region close to your users
+    - **Template**: Start with a predefined template or customize parameters
+    
+    <Tip>
+    Most Rack parameters can be changed after installation using `convox rack params set`. Start with defaults and optimize later.
+    </Tip>
+  </Step>
+  
+  <Step title="Wait for Installation">
+    Click **Install** to begin. Installation typically takes 5-20 minutes depending on your cloud provider.
+    
+    You can monitor progress by clicking on the Rack name during installation.
+  </Step>
+</Steps>
+
+## Step 4: Install the Convox CLI
+
+The Convox command-line interface is your primary tool for deploying and managing applications.
+
+<Tabs>
+  <Tab title="macOS (Intel)">
+    ```bash
+    curl -L https://github.com/convox/convox/releases/latest/download/convox-macos -o /tmp/convox
+    sudo mv /tmp/convox /usr/local/bin/convox
+    sudo chmod 755 /usr/local/bin/convox
+    ```
+  </Tab>
+  
+  <Tab title="macOS (Apple Silicon)">
+    ```bash
+    curl -L https://github.com/convox/convox/releases/latest/download/convox-macos-arm64 -o /tmp/convox
+    sudo mv /tmp/convox /usr/local/bin/convox
+    sudo chmod 755 /usr/local/bin/convox
+    ```
+  </Tab>
+  
+  <Tab title="Linux (x86_64)">
+    ```bash
+    curl -L https://github.com/convox/convox/releases/latest/download/convox-linux -o /tmp/convox
+    sudo mv /tmp/convox /usr/local/bin/convox
+    sudo chmod 755 /usr/local/bin/convox
+    ```
+  </Tab>
+  
+  <Tab title="Linux (ARM64)">
+    ```bash
+    curl -L https://github.com/convox/convox/releases/latest/download/convox-linux-arm64 -o /tmp/convox
+    sudo mv /tmp/convox /usr/local/bin/convox
+    sudo chmod 755 /usr/local/bin/convox
+    ```
+  </Tab>
+</Tabs>
+
+### Authenticate the CLI
+
+Copy the login command from the Convox Console checklist page, or generate a new CLI key from your [account page](https://console.convox.com/account).
+
+```bash
+convox login console.convox.com -t YOUR_CLI_KEY_HERE
+```
+
+Verify your connection:
+
+```bash
+$ convox racks
+NAME               PROVIDER  STATUS
+org/dev            aws       running
+```
+
+## Step 5: Deploy a Sample Application
+
+Let's deploy a simple Node.js application to see Convox in action.
+
+<Steps>
+  <Step title="Clone the Example Repository">
+    ```bash
+    git clone https://github.com/convox-examples/nodejs.git
+    cd nodejs
+    ```
+  </Step>
+  
+  <Step title="Examine the Manifest">
+    Take a look at the `convox.yml` file:
+    
+    ```yaml convox.yml
+    environment:
+      - PORT=3000
+    services:
+      web:
+        build: .
+        port: 3000
+    ```
+    
+    This manifest defines:
+    - A global environment variable `PORT` set to 3000
+    - A service named `web` that builds from the current directory
+    - The service listens on port 3000
+  </Step>
+  
+  <Step title="Switch to Your Rack">
+    ```bash
+    convox switch dev
+    ```
+    
+    This sets `dev` as your active Rack for subsequent commands.
+  </Step>
+  
+  <Step title="Create the Application">
+    ```bash
+    convox apps create
+    ```
+    
+    By default, the app is named after the current directory (`nodejs`). To use a different name:
+    
+    ```bash
+    convox apps create myapp
+    ```
+  </Step>
+  
+  <Step title="Deploy the Application">
+    ```bash
+    $ convox deploy
+    Packaging source... OK
+    Uploading source... OK
+    Starting build... OK
+    Authenticating 782231114432.dkr.ecr.us-east-1.amazonaws.com: Login Succeeded
+    Building: .
+    Sending build context to Docker daemon  48.95MB
+    Step 1/5 : FROM node:10.16.3-alpine
+    ...
+    Running: docker push 782231114432.dkr.ecr.us-east-1.amazonaws.com/convox:web.BUTQJQRIWUZ
+    Promoting RSBSSIPZIEF... 
+    ```
+    
+    <Info>
+    The first deployment takes a few minutes. Subsequent deployments are much faster due to Docker layer caching.
+    </Info>
+  </Step>
+  
+  <Step title="Access Your Application">
+    Get the service URLs:
+    
+    ```bash
+    $ convox services
+    SERVICE  DOMAIN                               PORTS
+    web      web.nodejs.0a1b2c3d4e5f.convox.cloud  443:3000
+    ```
+    
+    Open `https://web.nodejs.0a1b2c3d4e5f.convox.cloud` in your browser. You should see "Hello World!" 
+  </Step>
+</Steps>
+
+## Step 6: Make a Code Change
+
+Let's modify the application and redeploy to see Convox's update workflow.
+
+<Steps>
+  <Step title="Edit the Code">
+    Open `app.js` and change:
+    
+    ```javascript
+    res.end('Hello World!\nI\'m: ' ...
+    ```
+    
+    to:
+    
+    ```javascript
+    res.end('Hello Convox!\nI\'m: ' ...
+    ```
+  </Step>
+  
+  <Step title="Redeploy">
+    ```bash
+    convox deploy
+    ```
+    
+    Notice how much faster this deployment is! Convox reuses cached layers.
+  </Step>
+  
+  <Step title="Verify the Change">
+    Wait a few seconds for the rolling update to complete, then refresh your browser. You should see "Hello Convox!"
+  </Step>
+</Steps>
+
+## Step 7: Perform a Rollback
+
+Convox makes rollbacks instant by maintaining the state of all previous releases.
+
+<Steps>
+  <Step title="List Releases">
+    ```bash
+    $ convox releases
+    ID           STATUS  BUILD        CREATED        DESCRIPTION
+    RSBSSIPZIEF  active  BUTQJQRIWUZ  2 minutes ago
+    RYCWZIXLKQT          BVXIJQDCELS  30 minutes ago
+    ```
+  </Step>
+  
+  <Step title="Rollback to Previous Release">
+    ```bash
+    $ convox releases rollback RYCWZIXLKQT
+    Rolling back to RYCWZIXLKQT... OK, RSPAOICEBER
+    Promoting RSPAOICEBER...
+    ```
+  </Step>
+  
+  <Step title="Verify the Rollback">
+    Refresh your browser - the message should revert to "Hello World!"
+  </Step>
+</Steps>
+
+<Tip>
+Rollbacks use Kubernetes rolling updates, so there's zero downtime. Your users won't experience any interruption.
+</Tip>
+
+## What's Next?
+
+Congratulations! You've successfully:
+- ✅ Installed a Convox Rack
+- ✅ Deployed an application
+- ✅ Made a code change and redeployed
+- ✅ Rolled back to a previous release
+
+Now you're ready to dive deeper:
+
+<CardGroup cols={2}>
+  <Card title="Configure Your Own App" icon="gear" href="/tutorials/preparing-an-application">
+    Learn how to add a convox.yml to your existing application
+  </Card>
+  
+  <Card title="Add Resources" icon="database" href="/reference/primitives/app/resource">
+    Set up Postgres, Redis, MySQL and other managed resources
+  </Card>
+  
+  <Card title="Environment Variables" icon="key" href="/configuration/environment">
+    Manage secrets and configuration across environments
+  </Card>
+  
+  <Card title="CI/CD Integration" icon="arrows-rotate" href="/deployment/ci-cd-workflows">
+    Automate deployments with GitHub Actions, GitLab CI, and more
+  </Card>
+</CardGroup>
+
+## Common Commands
+
+Here are the CLI commands you'll use most often:
+
+```bash View Logs
+convox logs -a myapp
+convox logs -a myapp --filter web
+convox logs -a myapp --since 10m
+```
+
+```bash Run One-Off Commands
+convox run web rails console -a myapp
+convox run worker bundle exec rake db:migrate -a myapp
+```
+
+```bash Scale Services
+convox scale web --count 5 -a myapp
+convox scale web --cpu 512 --memory 1024 -a myapp
+```
+
+```bash Manage Environment Variables
+convox env -a myapp
+convox env set FOO=bar -a myapp
+convox env unset FOO -a myapp
+```
+
+## Getting Help
+
+<CardGroup cols={2}>
+  <Card title="Documentation" icon="book" href="/">
+    Browse the complete Convox documentation
+  </Card>
+  
+  <Card title="Stack Overflow" icon="stack-overflow" href="https://stackoverflow.com/questions/tagged/convox">
+    Ask questions and find answers from the community
+  </Card>
+  
+  <Card title="GitHub Issues" icon="github" href="https://github.com/convox/convox/issues">
+    Report bugs or request features
+  </Card>
+  
+  <Card title="Common CLI Commands" icon="terminal" href="https://www.convox.com/blog/common-convox-cli-commands">
+    Quick reference for frequently used commands
+  </Card>
+</CardGroup>

@@ -1,0 +1,453 @@
+---
+title: "Rollbacks"
+description: "Quickly revert to a previous release when issues occur"
+---
+
+Convox makes it easy to roll back to a previous [Release](/reference/primitives/app/release) when you need to quickly revert changes. Rollbacks create a new Release based on the old build and environment, then promote it using the same safe [rolling update](/deployment/rolling-updates) process as a normal deployment.
+
+## Understanding Rollbacks
+
+A rollback in Convox doesn't simply "undo" a deployment. Instead, it:
+
+<Steps>
+  <Step title="Creates a copy">
+    Makes a new Release that copies the build and environment from the target Release.
+  </Step>
+  
+  <Step title="Promotes forward">
+    Promotes this new Release, moving forward in your Release history rather than backward.
+  </Step>
+  
+  <Step title="Maintains history">
+    Preserves a complete audit trail of all changes, including rollbacks.
+  </Step>
+</Steps>
+
+<Note>
+This "roll forward" approach ensures you always have a complete history of what ran in your application and when.
+</Note>
+
+## Quick Rollback Process
+
+### Step 1: Find the Release
+
+First, identify the Release you want to roll back to:
+
+```bash
+$ convox releases -a myapp
+ID          STATUS  BUILD       CREATED        DESCRIPTION
+RCDEFGHIJK  active  BABCDEFGHI  1 minute ago   env add:FOO
+RBCDEFGHIJ          BABCDEFGHI  5 minutes ago  build 0a1b2c3d4e5f my commit message
+RABCDEFGHI          BZYXWVUTSR  2 hours ago    build 9z8y7x6w5v4u previous working version
+```
+
+In this example, `RCDEFGHIJK` is the current (active) Release that's causing problems, and we want to roll back to `RBCDEFGHIJ`.
+
+<Tip>
+The Release with `active` status is currently running. You can roll back to any previous Release in the list.
+</Tip>
+
+### Step 2: Trigger the Rollback
+
+Execute the rollback command:
+
+```bash
+$ convox releases rollback RBCDEFGHIJ -a myapp
+Rolling back to RBCDEFGHIJ... OK, RZYXWVUTSR
+Promoting RZYXWVUTSR...
+2019-01-01T00:00:49Z system/k8s/atom/app Status: Running => Pending
+2019-01-01T00:00:51Z system/k8s/web Scaled up replica set web-745f845dc to 1
+2019-01-01T00:00:51Z system/k8s/web-745f845dc Created pod: web-745f845dc-rzl2q
+2019-01-01T00:00:51Z system/k8s/web-745f845dc-rzl2q Successfully assigned convox-myapp/web-745f845dc-rzl2q to instance-0a1b2c3d4e5f
+2019-01-01T00:00:51Z system/k8s/web-745f845dc-rzl2q Pulling image "registry.host/convox/myapp:web.BABCDEFGHI"
+2019-01-01T00:00:53Z system/k8s/atom/app Status: Pending => Updating
+2019-01-01T00:00:55Z system/k8s/web-745f845dc-rzl2q Successfully pulled image "registry.host/convox/myapp:web.BABCDEFGHI"
+2019-01-01T00:00:56Z system/k8s/web-745f845dc-rzl2q Created container main
+2019-01-01T00:00:56Z system/k8s/web-745f845dc-rzl2q Started container main
+OK
+```
+
+### Step 3: Verify the Rollback
+
+Confirm the rollback was successful:
+
+```bash
+$ convox releases -a myapp
+ID          STATUS  BUILD       CREATED         DESCRIPTION
+RZYXWVUTSR  active  BABCDEFGHI  1 minute ago    build 0a1b2c3d4e5f my commit message
+RCDEFGHIJK          BABCDEFGHI  5 minutes ago   env add:FOO
+RBCDEFGHIJ          BABCDEFGHI  10 minutes ago  build 0a1b2c3d4e5f my commit message
+RABCDEFGHI          BZYXWVUTSR  2 hours ago     build 9z8y7x6w5v4u previous working version
+```
+
+Notice that:
+- A new Release `RZYXWVUTSR` is now active
+- It has the same Build ID as `RBCDEFGHIJ` (the target)
+- The problematic Release `RCDEFGHIJK` is preserved in history
+
+## Rollback Scenarios
+
+### Scenario 1: Code Issue
+
+**Problem**: Deployed code contains a critical bug
+
+<Steps>
+  <Step title="Identify last good release">
+    ```bash
+    $ convox releases -a myapp
+    ```
+    Find the last Release before the problematic deployment.
+  </Step>
+  
+  <Step title="Rollback immediately">
+    ```bash
+    $ convox releases rollback RBCDEFGHIJ -a myapp
+    ```
+  </Step>
+  
+  <Step title="Fix the bug">
+    Debug and fix the issue in your code locally.
+  </Step>
+  
+  <Step title="Deploy fixed version">
+    ```bash
+    $ convox deploy -a myapp
+    ```
+  </Step>
+</Steps>
+
+### Scenario 2: Environment Variable Issue
+
+**Problem**: Changed an environment variable incorrectly
+
+<Steps>
+  <Step title="Check current environment">
+    ```bash
+    $ convox env -a myapp
+    ```
+  </Step>
+  
+  <Step title="Find release with correct env">
+    ```bash
+    $ convox releases info RBCDEFGHIJ -a myapp
+    ```
+    Review the environment variables to confirm this is the right one.
+  </Step>
+  
+  <Step title="Rollback">
+    ```bash
+    $ convox releases rollback RBCDEFGHIJ -a myapp
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+Rolling back will restore both the code AND environment variables from the target Release. Make sure this is what you want.
+</Warning>
+
+### Scenario 3: Database Migration Gone Wrong
+
+**Problem**: A database migration caused issues
+
+<Steps>
+  <Step title="Rollback the application">
+    ```bash
+    $ convox releases rollback RBCDEFGHIJ -a myapp
+    ```
+  </Step>
+  
+  <Step title="Rollback the migration">
+    Manually rollback the database migration:
+    ```bash
+    $ convox run web rake db:rollback -a myapp
+    ```
+  </Step>
+  
+  <Step title="Verify application">
+    Test that the application works correctly with the rolled-back schema.
+  </Step>
+</Steps>
+
+<Note>
+Convox doesn't automatically rollback database migrations. You must handle database changes separately.
+</Note>
+
+## Advanced Rollback Options
+
+### Force Rollback
+
+By default, Convox waits for your app to be ready before rolling back. Use `--force` to skip this check:
+
+```bash
+$ convox releases rollback RBCDEFGHIJ -a myapp --force
+```
+
+<Warning>
+Forcing a rollback can lead to unexpected behavior if your app is in an unstable state. Use with caution.
+</Warning>
+
+### Get Rollback Release ID
+
+Capture the new Release ID for automation:
+
+```bash
+$ convox releases rollback RBCDEFGHIJ -a myapp --id
+RZYXWVUTSR
+```
+
+This is useful in CI/CD pipelines:
+
+```bash
+ROLLBACK_RELEASE=$(convox releases rollback $TARGET_RELEASE -a myapp --id)
+echo "Rolled back to release: $ROLLBACK_RELEASE"
+```
+
+### Rollback Without Waiting
+
+For faster rollbacks in urgent situations, you can trigger the rollback and return immediately:
+
+```bash
+$ convox releases rollback RBCDEFGHIJ -a myapp &
+# Continue with other tasks while rollback proceeds
+```
+
+## Automatic vs Manual Rollbacks
+
+Convox supports two types of rollbacks:
+
+<CardGroup cols={2}>
+  <Card title="Automatic Rollback" icon="shield-check">
+    Happens during deployment when health checks fail. The system automatically reverts to the previous Release.
+    
+    **Triggered by**:
+    - Failed health checks
+    - Process startup failures
+    - Container crashes
+  </Card>
+  
+  <Card title="Manual Rollback" icon="hand">
+    You explicitly execute a rollback command to revert to a specific Release.
+    
+    **Use when**:
+    - Issues discovered after deployment
+    - Gradual performance degradation
+    - Business logic errors
+  </Card>
+</CardGroup>
+
+## Rollback Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Document Rollback Reasons" icon="note">
+    Always document why you rolled back in your incident management system to learn from issues.
+  </Card>
+  
+  <Card title="Test After Rollback" icon="vial">
+    Verify that the rolled-back version actually resolves the issue before considering the incident closed.
+  </Card>
+  
+  <Card title="Keep Release History" icon="clock-rotate-left">
+    Don't delete old Releases. The storage cost is minimal and they're invaluable for rollbacks.
+  </Card>
+  
+  <Card title="Roll Forward When Possible" icon="forward">
+    If you can fix the issue quickly, deploy a fix forward rather than rolling back.
+  </Card>
+  
+  <Card title="Handle Database Changes" icon="database">
+    Plan database migration rollback strategies independently of application rollbacks.
+  </Card>
+  
+  <Card title="Monitor After Rollback" icon="chart-line">
+    Watch metrics closely after rolling back to ensure the issue is resolved.
+  </Card>
+  
+  <Card title="Use Staging First" icon="layer-group">
+    Test risky changes in staging to avoid needing production rollbacks.
+  </Card>
+  
+  <Card title="Communicate Rollbacks" icon="bullhorn">
+    Inform your team when you perform a rollback, especially in production.
+  </Card>
+</CardGroup>
+
+## Rollback Alternatives
+
+### Feature Flags
+
+Use feature flags to disable problematic features without rolling back:
+
+```bash
+$ convox env set FEATURE_NEW_CHECKOUT=false -a myapp
+```
+
+### Partial Rollback
+
+Roll back just environment variables while keeping the new code:
+
+<Steps>
+  <Step title="Get old environment">
+    ```bash
+    $ convox releases info RBCDEFGHIJ -a myapp
+    ```
+  </Step>
+  
+  <Step title="Create new release">
+    ```bash
+    $ convox releases create-from --env-from RBCDEFGHIJ --use-active-release-build --promote -a myapp
+    ```
+  </Step>
+</Steps>
+
+### Canary Rollback
+
+For large applications, consider a gradual rollback by scaling services incrementally:
+
+```bash
+# Scale down new version
+$ convox scale web --count=2 -a myapp-new
+
+# Scale up old version
+$ convox scale web --count=8 -a myapp-old
+```
+
+## Troubleshooting Rollbacks
+
+### Rollback Fails
+
+**Symptoms**: Rollback command fails or times out
+
+**Possible causes**:
+- Target Release no longer exists
+- Insufficient resources
+- Docker images not available
+
+**Solutions**:
+1. Verify the Release ID: `convox releases -a myapp`
+2. Check rack resources: `convox rack`
+3. Ensure Docker registry is accessible
+4. Try with `--force` flag if app is stuck
+
+### Rollback Doesn't Fix Issue
+
+**Symptoms**: Rolled back but problem persists
+
+**Possible causes**:
+- Issue is in database or external service
+- Wrong Release selected
+- Environment variables changed outside Convox
+
+**Solutions**:
+1. Verify the correct Release is active
+2. Check database state and external services
+3. Review logs: `convox logs -a myapp`
+4. Confirm environment variables: `convox env -a myapp`
+
+### Release History Lost
+
+**Symptoms**: Can't find Release to roll back to
+
+**Possible causes**:
+- Releases purged due to retention policy
+- Looking at wrong app or rack
+
+**Solutions**:
+1. Check Release retention settings
+2. Verify app name: `convox apps`
+3. Check correct rack: `convox switch`
+4. Contact support if Releases were accidentally deleted
+
+## Monitoring and Alerts
+
+### Set Up Rollback Alerts
+
+Notify your team when rollbacks occur:
+
+```yaml
+# In your convox.yml
+services:
+  web:
+    build: .
+    port: 3000
+    environment:
+      - ROLLBAR_TOKEN
+      - SENTRY_DSN
+```
+
+Implement rollback detection in your monitoring:
+
+```javascript
+const currentRelease = process.env.RELEASE;
+if (previousRelease && currentRelease < previousRelease) {
+  monitoring.alert('Rollback detected', { currentRelease, previousRelease });
+}
+```
+
+### Track Rollback Metrics
+
+Monitor rollback frequency to identify patterns:
+- Number of rollbacks per week/month
+- Time to detect issues requiring rollback
+- Time to execute rollback
+- Services most frequently rolled back
+
+## Release Management
+
+### View Release Details
+
+Get comprehensive information about any Release:
+
+```bash
+$ convox releases info RBCDEFGHIJ -a myapp
+Id           RBCDEFGHIJ
+Build        BABCDEFGHI
+Created      2019-01-01T00:00:00Z
+Description  build 0a1b2c3d4e5f my commit message
+Env          DATABASE_URL=postgres://...
+             REDIS_URL=redis://...
+             API_KEY=xxx
+```
+
+### Compare Releases
+
+Compare two Releases to understand what changed:
+
+```bash
+# View current release
+$ convox releases info $(convox api get /apps/myapp | jq -r .release) -a myapp
+
+# View previous release
+$ convox releases info RBCDEFGHIJ -a myapp
+
+# Compare the output
+```
+
+### Get Release Manifest
+
+View the convox.yml used for a specific Release:
+
+```bash
+$ convox releases manifest RBCDEFGHIJ -a myapp
+```
+
+This helps verify configuration differences between Releases.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Rolling Updates" icon="rotate" href="/deployment/rolling-updates">
+    Understand how deployments and rollbacks are executed
+  </Card>
+  
+  <Card title="Deploying Changes" icon="upload" href="/deployment/deploying-changes">
+    Learn best practices for safe deployments
+  </Card>
+  
+  <Card title="Health Checks" icon="heart-pulse" href="/configuration/health-checks">
+    Configure health checks to catch issues early
+  </Card>
+  
+  <Card title="Troubleshooting" icon="wrench" href="/help/troubleshooting">
+    Diagnose common deployment and rollback issues
+  </Card>
+</CardGroup>

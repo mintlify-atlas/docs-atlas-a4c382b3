@@ -1,0 +1,225 @@
+---
+title: "Deploying Changes"
+description: "Deploy code changes to your Convox applications with one-step or two-step workflows"
+---
+
+To deploy changes to your code, you create a [Release](/reference/primitives/app/release) and then promote it. Convox provides flexible deployment workflows to fit your needs, from simple one-step deployments to multi-step workflows with pre-deployment validation.
+
+## Understanding the Deployment Process
+
+Every deployment in Convox follows a two-phase process:
+
+1. **Build Phase**: Your code is packaged, Docker images are built, and a new Release is created
+2. **Promotion Phase**: The new Release is rolled out to your running Processes using a [rolling update](/deployment/rolling-updates)
+
+Promoting a Release begins a rolling deployment that continues until the new Release is active on all [Processes](/reference/primitives/app/process) or has been completely rolled back.
+
+## One-Step Deployment
+
+The simplest way to deploy is using `convox deploy`, which builds and promotes your application in a single command.
+
+<Steps>
+  <Step title="Run the deploy command">
+    From your application directory, run:
+    
+    ```bash
+    $ convox deploy -a myapp
+    ```
+  </Step>
+  
+  <Step title="Monitor the deployment">
+    The command will show real-time progress as your application is built and deployed:
+    
+    ```bash
+    Packaging source... OK
+    Uploading source... OK
+    Starting build... OK
+    ...
+    Build: BABCDEFGHI
+    Release: RBCDEFGHIJ
+    Promoting RBCDEFGHIJ...
+    2019-01-01T00:00:49Z system/k8s/atom/app Status: Running => Pending
+    2019-01-01T00:00:51Z system/k8s/web Scaled up replica set web-745f845dc to 1
+    2019-01-01T00:00:51Z system/k8s/web-745f845dc Created pod: web-745f845dc-rzl2q
+    2019-01-01T00:00:51Z system/k8s/web-745f845dc-rzl2q Successfully assigned convox-myapp/web-745f845dc-rzl2q to instance-0a1b2c3d4e5f
+    2019-01-01T00:00:51Z system/k8s/web-745f845dc-rzl2q Pulling image "registry.host/convox/myapp:web.BABCDEFGHI"
+    2019-01-01T00:00:53Z system/k8s/atom/app Status: Pending => Updating
+    2019-01-01T00:00:55Z system/k8s/web-745f845dc-rzl2q Successfully pulled image "registry.host/convox/myapp:web.BABCDEFGHI"
+    2019-01-01T00:00:56Z system/k8s/web-745f845dc-rzl2q Created container main
+    2019-01-01T00:00:56Z system/k8s/web-745f845dc-rzl2q Started container main
+    OK
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+Use `convox deploy -a myapp --id` to output only the Release ID, which is useful for CI/CD pipelines and automation scripts.
+</Tip>
+
+## Two-Step Deployment
+
+For production environments or when you need to run migrations or validate environment variables, use a two-step workflow that separates building from promotion.
+
+<Steps>
+  <Step title="Build your application">
+    Create a new Release without promoting it:
+    
+    ```bash
+    $ convox build -a myapp
+    Packaging source... OK
+    Uploading source... OK
+    Starting build... OK
+    ...
+    Build: BABCDEFGHI
+    Release: RBCDEFGHIJ
+    ```
+    
+    This creates a new Release but doesn't deploy it yet.
+  </Step>
+  
+  <Step title="Make any necessary changes">
+    Before promoting, you can:
+    
+    - Update environment variables
+    - Run database migrations
+    - Validate the new build
+    - Test the Release in a staging environment
+    
+    ```bash
+    # Update environment variables
+    $ convox env set FOO=bar -a myapp
+    
+    # Run migrations against the new release
+    $ convox run web rake db:migrate --release RBCDEFGHIJ -a myapp
+    ```
+  </Step>
+  
+  <Step title="Promote the Release">
+    Once you're ready, promote the Release to production:
+    
+    ```bash
+    $ convox releases promote RBCDEFGHIJ -a myapp
+    Promoting RBCDEFGHIJ...
+    2019-01-01T00:00:49Z system/k8s/atom/app Status: Running => Pending
+    2019-01-01T00:00:51Z system/k8s/web Scaled up replica set web-745f845dc to 1
+    2019-01-01T00:00:51Z system/k8s/web-745f845dc Created pod: web-745f845dc-rzl2q
+    2019-01-01T00:00:51Z system/k8s/web-745f845dc-rzl2q Successfully assigned convox-myapp/web-745f845dc-rzl2q to instance-0a1b2c3d4e5f
+    2019-01-01T00:00:51Z system/k8s/web-745f845dc-rzl2q Pulling image "registry.host/convox/myapp:web.BABCDEFGHI"
+    2019-01-01T00:00:53Z system/k8s/atom/app Status: Pending => Updating
+    2019-01-01T00:00:55Z system/k8s/web-745f845dc-rzl2q Successfully pulled image "registry.host/convox/myapp:web.BABCDEFGHI"
+    2019-01-01T00:00:56Z system/k8s/web-745f845dc-rzl2q Created container main
+    2019-01-01T00:00:56Z system/k8s/web-745f845dc-rzl2q Started container main
+    OK
+    ```
+  </Step>
+</Steps>
+
+## Deployment Options
+
+### Force Promotion
+
+By default, Convox waits for your app to be in a `running` state before promoting. Use `--force` to skip this check:
+
+```bash
+$ convox deploy -a myapp --force
+```
+
+<Warning>
+Forcing a promotion can lead to unexpected behavior if your app is not ready. Use with caution.
+</Warning>
+
+### Deploy from a Specific Directory
+
+You can deploy from any directory by specifying the path:
+
+```bash
+$ convox deploy /path/to/app -a myapp
+```
+
+## Viewing Releases
+
+To see all Releases for your application:
+
+```bash
+$ convox releases -a myapp
+ID          STATUS  BUILD       CREATED        DESCRIPTION
+RCDEFGHIJK  active  BABCDEFGHI  1 minute ago   env add:FOO
+RBCDEFGHIJ          BABCDEFGHI  5 minutes ago  build 0a1b2c3d4e5f my commit message
+```
+
+The `active` status indicates which Release is currently running.
+
+## Release Information
+
+Get detailed information about a specific Release:
+
+```bash
+$ convox releases info RBCDEFGHIJ -a myapp
+Id           RBCDEFGHIJ
+Build        BABCDEFGHI
+Created      2019-01-01T00:00:00Z
+Description  build 0a1b2c3d4e5f my commit message
+Env          FOO=bar
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Two-Step for Production" icon="shield-check">
+    Always use the two-step deployment process for production environments to allow for pre-deployment validation and migrations.
+  </Card>
+  
+  <Card title="Test Before Promoting" icon="flask">
+    Run your test suite against the new build before promoting to ensure code quality.
+  </Card>
+  
+  <Card title="Run Migrations Safely" icon="database">
+    Execute database migrations against the new Release before promoting to avoid downtime.
+  </Card>
+  
+  <Card title="Monitor Deployments" icon="eye">
+    Watch deployment logs carefully for any issues during the rolling update process.
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### Deployment Hangs
+
+If a deployment appears to hang:
+
+1. Check that your [health checks](/configuration/health-checks) are properly configured
+2. Ensure your application is listening on the correct port
+3. Review application logs with `convox logs -a myapp`
+
+### Build Fails
+
+If your build fails:
+
+1. Check the build logs for error messages
+2. Ensure your Dockerfile or buildpack is correctly configured
+3. Verify all required build dependencies are available
+
+### Automatic Rollback
+
+If your deployment automatically rolls back, it means the new Release failed health checks. See [Rolling Updates](/deployment/rolling-updates) and [Rollbacks](/deployment/rollbacks) for more information.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Rolling Updates" icon="rotate" href="/deployment/rolling-updates">
+    Learn how Convox performs zero-downtime deployments
+  </Card>
+  
+  <Card title="CI/CD Workflows" icon="arrows-spin" href="/deployment/ci-cd-workflows">
+    Automate deployments with continuous integration
+  </Card>
+  
+  <Card title="Rollbacks" icon="clock-rotate-left" href="/deployment/rollbacks">
+    Quickly revert to a previous Release if issues occur
+  </Card>
+  
+  <Card title="Scaling" icon="up-right-and-down-left-from-center" href="/deployment/scaling">
+    Scale your application to handle more traffic
+  </Card>
+</CardGroup>

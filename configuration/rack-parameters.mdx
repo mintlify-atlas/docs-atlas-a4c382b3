@@ -1,0 +1,384 @@
+---
+title: "Rack Parameters"
+description: "Configure rack-level settings for your Convox infrastructure"
+---
+
+# Rack Parameters
+
+Rack parameters are configuration settings that control various aspects of your Convox rack. These parameters allow you to customize and optimize the behavior of your applications and services at the infrastructure level.
+
+## Overview
+
+Rack parameters provide infrastructure-level configuration that applies to all applications running on the rack. This includes settings for:
+
+<CardGroup cols={2}>
+  <Card title="Compute Resources" icon="microchip">
+    Node types, capacity, scaling, and GPU configuration
+  </Card>
+  <Card title="Networking" icon="network-wired">
+    VPC, subnets, load balancers, and proxy protocol
+  </Card>
+  <Card title="Storage" icon="hard-drive">
+    EBS encryption, EFS drivers, and volume configuration
+  </Card>
+  <Card title="Observability" icon="chart-line">
+    Logging, monitoring, and access log retention
+  </Card>
+</CardGroup>
+
+## Installing Racks with Parameters
+
+When installing a new rack through the Convox Console, you can configure parameters at installation time. This allows you to customize your rack configuration from the start.
+
+### Using the Install Modal
+
+During rack installation, you can set any available parameters directly in the install modal. Parameters not explicitly set will use their default values.
+
+### Parameter Templates
+
+The Convox Console provides pre-created parameter templates for common use cases:
+
+<Tabs>
+  <Tab title="Production">
+    Optimized for production workloads with:
+    - High availability enabled
+    - Enhanced security settings
+    - Automatic scaling configuration
+    - Increased resource limits
+  </Tab>
+  
+  <Tab title="Staging">
+    Balanced configuration suitable for:
+    - Testing production configurations
+    - Cost-optimized resources
+    - Moderate availability settings
+  </Tab>
+  
+  <Tab title="Minimalist">
+    Minimal resource configuration for:
+    - Development environments
+    - Cost-sensitive deployments
+    - Testing and experimentation
+  </Tab>
+  
+  <Tab title="CMS">
+    Optimized for content management systems:
+    - EFS storage enabled
+    - Appropriate instance types
+    - Session affinity configured
+  </Tab>
+  
+  <Tab title="Default">
+    Basic configuration with:
+    - Most features disabled
+    - Minimal interference with existing infrastructure
+    - Standard AWS defaults
+  </Tab>
+</Tabs>
+
+### Using JSON Parameter Files
+
+You can upload a JSON file containing your desired parameter configurations:
+
+```json
+{
+  "node_type": "t3.medium",
+  "node_capacity_type": "on_demand",
+  "build_node_enabled": "true",
+  "build_node_type": "t3.large",
+  "high_availability": "true",
+  "node_disk": "20",
+  "min_on_demand_count": "2",
+  "max_on_demand_count": "10",
+  "proxy_protocol": "true",
+  "efs_csi_driver_enable": "true"
+}
+```
+
+This example configuration:
+- Uses `t3.medium` instances for regular nodes with on-demand capacity
+- Enables a dedicated build node using `t3.large` instances
+- Ensures high availability with a minimum of 2 on-demand nodes
+- Increases node disk size to 20GB
+- Enables proxy protocol for client IP preservation
+- Enables EFS CSI driver for shared storage capabilities
+
+<Note>
+  You only need to include parameters you want to change from their defaults. Any parameters not specified in your JSON file will use their default values.
+</Note>
+
+### Best Practices for Parameter Templates
+
+<CardGroup cols={2}>
+  <Card title="Start Small" icon="seedling">
+    Begin with minimal changes and add parameters as needed
+  </Card>
+  <Card title="Document Your Choices" icon="book">
+    Comment your JSON files to explain specific parameter choices
+  </Card>
+  <Card title="Test First" icon="flask">
+    Always test parameter configurations in non-production environments
+  </Card>
+  <Card title="Version Control" icon="code-branch">
+    Store parameter JSON files in version control with your application code
+  </Card>
+</CardGroup>
+
+## Managing Rack Parameters
+
+### Viewing Current Parameters
+
+To view the current rack parameters:
+
+```bash
+$ convox rack params -r rackName
+access_log_retention_in_days          7
+build_node_enabled                    true
+build_node_min_count                  0
+build_node_type                       t3.small
+high_availability                     false
+node_capacity_type                    on_demand
+node_disk                             20
+node_type                             t3.medium
+```
+
+<Note>
+  This command displays the current values of all rack parameters for the specified rack.
+</Note>
+
+### Setting Parameters
+
+To set a rack parameter:
+
+<CodeGroup>
+```bash Single Parameter
+$ convox rack params set node_type=t3.large -r rackName
+Setting parameters... OK
+```
+
+```bash Multiple Parameters
+$ convox rack params set node_type=t3.large high_availability=true -r rackName
+Setting parameters... OK
+```
+</CodeGroup>
+
+<Warning>
+  Some parameter changes may trigger rack updates or node replacements. Review the parameter documentation before making changes to production racks.
+</Warning>
+
+## Cloud Providers
+
+Rack parameters vary by cloud provider. Select your provider for detailed parameter documentation:
+
+<CardGroup cols={2}>
+  <Card title="Amazon Web Services (AWS)" icon="aws" href="/configuration/rack-parameters/aws">
+    Comprehensive AWS rack parameters including EC2, EKS, VPC, and more
+  </Card>
+  <Card title="Google Cloud Platform (GCP)" icon="google" href="/configuration/rack-parameters/gcp">
+    GCP-specific parameters for GKE and cloud resources
+  </Card>
+  <Card title="Microsoft Azure" icon="microsoft" href="/configuration/rack-parameters/azure">
+    Azure rack configuration for AKS and Azure services
+  </Card>
+  <Card title="Digital Ocean" icon="digital-ocean" href="/configuration/rack-parameters/do">
+    Digital Ocean Kubernetes-specific parameters
+  </Card>
+</CardGroup>
+
+## Common Parameter Categories
+
+### Compute Configuration
+
+<ParamField path="node_type" type="string">
+  The EC2 instance type for cluster nodes (e.g., `t3.medium`, `m5.large`)
+</ParamField>
+
+<ParamField path="node_capacity_type" type="string" default="on_demand">
+  Node capacity type: `on_demand`, `spot`, or `mixed`
+</ParamField>
+
+<ParamField path="node_disk" type="number" default="20">
+  Node disk size in GB
+</ParamField>
+
+<ParamField path="build_node_enabled" type="boolean" default="false">
+  Enable dedicated build nodes for application builds
+</ParamField>
+
+### High Availability
+
+<ParamField path="high_availability" type="boolean" default="false">
+  Creates a cluster with redundant resources across multiple availability zones
+</ParamField>
+
+<ParamField path="min_on_demand_count" type="number">
+  Minimum number of on-demand nodes when using mixed capacity type
+</ParamField>
+
+<ParamField path="max_on_demand_count" type="number">
+  Maximum number of on-demand nodes when using mixed capacity type
+</ParamField>
+
+### Storage
+
+<ParamField path="efs_csi_driver_enable" type="boolean" default="false">
+  Enable the EFS CSI driver to use AWS EFS volumes
+</ParamField>
+
+<ParamField path="ebs_volume_encryption_enabled" type="boolean" default="false">
+  Enable encryption for EBS volumes used by primary node disks
+</ParamField>
+
+### Networking
+
+<ParamField path="proxy_protocol" type="boolean" default="false">
+  Enable Proxy Protocol to track the original client IP address
+</ParamField>
+
+<ParamField path="private" type="boolean" default="false">
+  Place nodes in private subnets behind NAT gateways
+</ParamField>
+
+<ParamField path="internal_router" type="boolean" default="false">
+  Install an internal load balancer within the VPC
+</ParamField>
+
+### Observability
+
+<ParamField path="access_log_retention_in_days" type="number" default="7">
+  Retention period for Nginx access logs in CloudWatch Logs
+</ParamField>
+
+<ParamField path="fluentd_disable" type="boolean" default="false">
+  Disable Fluentd installation in the rack
+</ParamField>
+
+<ParamField path="syslog" type="string">
+  Endpoint to forward logs to a syslog server
+</ParamField>
+
+## Example Configurations
+
+### Production Configuration
+
+```json
+{
+  "high_availability": "true",
+  "node_type": "m5.xlarge",
+  "node_capacity_type": "mixed",
+  "min_on_demand_count": "3",
+  "max_on_demand_count": "10",
+  "node_disk": "50",
+  "build_node_enabled": "true",
+  "build_node_type": "c5.2xlarge",
+  "ebs_volume_encryption_enabled": "true",
+  "proxy_protocol": "true",
+  "efs_csi_driver_enable": "true",
+  "access_log_retention_in_days": "90"
+}
+```
+
+### Development Configuration
+
+```json
+{
+  "node_type": "t3.small",
+  "node_capacity_type": "spot",
+  "node_disk": "20",
+  "build_node_enabled": "false",
+  "high_availability": "false"
+}
+```
+
+### CMS Configuration
+
+```json
+{
+  "node_type": "t3.medium",
+  "node_disk": "30",
+  "efs_csi_driver_enable": "true",
+  "high_availability": "true",
+  "min_on_demand_count": "2"
+}
+```
+
+## Environment-Specific Parameters
+
+Maintain different parameter configurations for different environments:
+
+<Tabs>
+  <Tab title="Development">
+    ```json
+    {
+      "node_type": "t3.small",
+      "node_capacity_type": "spot",
+      "high_availability": "false",
+      "build_node_enabled": "false"
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Staging">
+    ```json
+    {
+      "node_type": "t3.medium",
+      "node_capacity_type": "on_demand",
+      "high_availability": "true",
+      "build_node_enabled": "true"
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Production">
+    ```json
+    {
+      "node_type": "m5.large",
+      "node_capacity_type": "mixed",
+      "high_availability": "true",
+      "min_on_demand_count": "3",
+      "build_node_enabled": "true",
+      "ebs_volume_encryption_enabled": "true",
+      "proxy_protocol": "true"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Parameter changes not taking effect">
+    - Some parameters require rack updates to apply
+    - Check rack status: `convox rack -r rackName`
+    - Wait for the rack to finish updating before checking changes
+    - Review CloudFormation events for any errors
+  </Accordion>
+  
+  <Accordion title="Invalid parameter value">
+    - Check parameter documentation for valid values
+    - Ensure string values are properly quoted in JSON
+    - Boolean values should be strings: `"true"` not `true`
+    - Verify parameter names are spelled correctly
+  </Accordion>
+  
+  <Accordion title="Cost concerns after parameter changes">
+    - Review instance types and counts before applying
+    - Use spot instances for non-production environments
+    - Monitor AWS Cost Explorer after changes
+    - Consider using mixed capacity types for cost optimization
+  </Accordion>
+</AccordionGroup>
+
+## Related Documentation
+
+<CardGroup cols={3}>
+  <Card title="App Parameters" icon="sliders" href="/configuration/app-parameters">
+    Application-specific configuration parameters
+  </Card>
+  <Card title="Volumes" icon="hard-drive" href="/configuration/volumes">
+    Configure persistent storage with EFS
+  </Card>
+  <Card title="Rack Management" icon="server" href="/management/cli-rack-management">
+    Managing and updating racks
+  </Card>
+</CardGroup>

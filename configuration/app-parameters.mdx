@@ -1,0 +1,335 @@
+---
+title: "App Parameters"
+description: "Configure application-specific settings for your Convox apps"
+---
+
+# App Parameters
+
+App parameters are configuration settings that control various aspects of your Convox applications. These parameters allow you to customize and optimize the behavior of individual applications without modifying your application code or affecting other apps on the same rack.
+
+## Overview
+
+App parameters provide application-level configuration that is independent of rack-level settings. This allows you to:
+
+<CardGroup cols={2}>
+  <Card title="Customize Builds" icon="hammer">
+    Control build pod resources and placement
+  </Card>
+  <Card title="Optimize Performance" icon="gauge-high">
+    Tune CPU and memory for build processes
+  </Card>
+  <Card title="Target Specific Nodes" icon="bullseye">
+    Use node selectors to place builds on specific node groups
+  </Card>
+  <Card title="Independent Configuration" icon="layer-group">
+    Configure apps independently without affecting the rack
+  </Card>
+</CardGroup>
+
+## Managing App Parameters
+
+### Viewing Current Parameters
+
+To view the current app parameters:
+
+```bash
+$ convox apps params -a appName
+NAME         VALUE
+BuildLabels  
+BuildCpu     
+BuildMem     
+```
+
+<Note>
+  This command displays the current values of all app parameters for the specified application. Empty values indicate defaults are being used.
+</Note>
+
+### Setting Parameters
+
+To set an app parameter:
+
+<CodeGroup>
+```bash Single Parameter
+$ convox apps params set BuildCpu=1024 -a appName
+Setting parameters... OK
+```
+
+```bash Multiple Parameters
+$ convox apps params set BuildCpu=1024 BuildMem=2048 -a appName
+Setting parameters... OK
+```
+</CodeGroup>
+
+### Unsetting Parameters
+
+To reset a parameter to its default value:
+
+```bash
+$ convox apps params set BuildCpu= -a appName
+Setting parameters... OK
+```
+
+<Note>
+  Setting a parameter to an empty value resets it to the default behavior.
+</Note>
+
+## Available Parameters
+
+App parameters are cloud provider-specific. Currently, Convox supports app parameters for AWS deployments.
+
+<Card title="Amazon Web Services (AWS)" icon="aws" href="/configuration/app-parameters/aws">
+  Configure build resources and node placement for AWS-hosted applications
+</Card>
+
+## Common App Parameters
+
+### Build Configuration
+
+<ParamField path="BuildCpu" type="number">
+  CPU request for build pods in millicores (1000 = 1 vCPU)
+</ParamField>
+
+<ParamField path="BuildMem" type="number">
+  Memory request for build pods in megabytes
+</ParamField>
+
+<ParamField path="BuildLabels" type="string">
+  Kubernetes node selector labels for build pod placement (comma-separated key=value pairs)
+</ParamField>
+
+### Example Configuration
+
+```bash
+# Set build resources
+$ convox apps params set BuildCpu=2048 BuildMem=4096 -a myapp
+Setting parameters... OK
+
+# Target specific build node group
+$ convox apps params set BuildLabels=convox.io/node-group=build -a myapp
+Setting parameters... OK
+
+# View configuration
+$ convox apps params -a myapp
+NAME         VALUE
+BuildLabels  convox.io/node-group=build
+BuildCpu     2048
+BuildMem     4096
+```
+
+## Use Cases
+
+### Large Application Builds
+
+For applications with resource-intensive builds:
+
+```bash
+$ convox apps params set BuildCpu=4096 BuildMem=8192 -a large-app
+Setting parameters... OK
+```
+
+<Note>
+  This allocates 4 vCPUs and 8GB of memory to build pods, suitable for large compilations or multi-stage Docker builds.
+</Note>
+
+### Dedicated Build Nodes
+
+Direct builds to dedicated build node groups:
+
+```bash
+# First, ensure your rack has dedicated build nodes
+$ convox rack params set build_node_enabled=true -r rackName
+
+# Then configure the app to use them
+$ convox apps params set BuildLabels=convox.io/node-group=build -a myapp
+Setting parameters... OK
+```
+
+<Warning>
+  When using `BuildLabels`, ensure the labels match those defined in your rack's `additional_build_groups_config`. Mismatched labels will cause builds to remain in pending state indefinitely.
+</Warning>
+
+### Cost-Optimized Builds
+
+For simple builds that don't require many resources:
+
+```bash
+$ convox apps params set BuildCpu=512 BuildMem=1024 -a simple-app
+Setting parameters... OK
+```
+
+### Multi-Stage Docker Builds
+
+For complex multi-stage builds with heavy compilation:
+
+```bash
+$ convox apps params set BuildCpu=4096 BuildMem=8192 -a compiler-heavy-app
+Setting parameters... OK
+```
+
+## Configuration Examples
+
+<Tabs>
+  <Tab title="Simple App">
+    ```bash
+    # Minimal resources for basic builds
+    $ convox apps params set \
+      BuildCpu=512 \
+      BuildMem=1024 \
+      -a simple-app
+    ```
+    Suitable for:
+    - Static site generators
+    - Simple Node.js apps
+    - Python/Ruby applications
+  </Tab>
+  
+  <Tab title="Standard App">
+    ```bash
+    # Balanced resources for typical builds
+    $ convox apps params set \
+      BuildCpu=1024 \
+      BuildMem=2048 \
+      -a standard-app
+    ```
+    Suitable for:
+    - Standard web applications
+    - Moderate-sized containers
+    - Typical compilation needs
+  </Tab>
+  
+  <Tab title="Heavy Build">
+    ```bash
+    # High resources for intensive builds
+    $ convox apps params set \
+      BuildCpu=4096 \
+      BuildMem=8192 \
+      BuildLabels=convox.io/node-group=build \
+      -a heavy-build-app
+    ```
+    Suitable for:
+    - Large Java/C++ compilations
+    - Multi-stage Docker builds
+    - Complex frontend builds (webpack, etc.)
+  </Tab>
+  
+  <Tab title="GPU Build">
+    ```bash
+    # Target GPU-enabled build nodes
+    $ convox apps params set \
+      BuildCpu=2048 \
+      BuildMem=4096 \
+      BuildLabels=node.kubernetes.io/instance-type=p3.2xlarge \
+      -a ml-app
+    ```
+    Suitable for:
+    - Machine learning model compilation
+    - GPU-accelerated builds
+    - CUDA-based applications
+  </Tab>
+</Tabs>
+
+## App Parameters vs Rack Parameters
+
+<CardGroup cols={2}>
+  <Card title="App Parameters" icon="layer-group">
+    - Apply to individual applications
+    - Do not affect other apps
+    - Can be changed without rack updates
+    - Ideal for app-specific optimizations
+  </Card>
+  <Card title="Rack Parameters" icon="server">
+    - Apply to the entire rack
+    - Affect all applications
+    - May require rack updates
+    - Control infrastructure settings
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Start Conservative" icon="shield">
+    Begin with default values and increase only if needed
+  </Card>
+  <Card title="Monitor Builds" icon="chart-line">
+    Watch build times and resource usage to optimize parameters
+  </Card>
+  <Card title="Match Node Capacity" icon="scale-balanced">
+    Ensure build nodes have sufficient resources for your settings
+  </Card>
+  <Card title="Document Settings" icon="book">
+    Keep track of parameter values for each app and environment
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Build pods pending indefinitely">
+    Common causes:
+    - `BuildLabels` don't match any available nodes
+    - Insufficient resources on targeted nodes
+    - No nodes with matching labels exist
+    
+    Solutions:
+    - Verify labels with `kubectl get nodes --show-labels`
+    - Check rack parameters for node group configuration
+    - Remove `BuildLabels` to allow scheduling on any node
+  </Accordion>
+  
+  <Accordion title="Build failing with out-of-memory errors">
+    Common causes:
+    - `BuildMem` is too low for the build process
+    - Memory-intensive operations during build
+    - Multi-stage builds with large intermediate layers
+    
+    Solutions:
+    - Increase `BuildMem` (try doubling the current value)
+    - Optimize Dockerfile to reduce memory usage
+    - Split into smaller build stages
+  </Accordion>
+  
+  <Accordion title="Build timing out">
+    Common causes:
+    - `BuildCpu` is too low for compilation tasks
+    - CPU-intensive build processes
+    - Slow dependency downloads
+    
+    Solutions:
+    - Increase `BuildCpu` for more processing power
+    - Use build caching to speed up subsequent builds
+    - Optimize build process (parallel compilation, etc.)
+  </Accordion>
+</AccordionGroup>
+
+## Parameter Inheritance
+
+App parameters work alongside rack parameters:
+
+```bash
+# Rack-level: Enable dedicated build nodes
+$ convox rack params set build_node_enabled=true -r production
+
+# App-level: Configure app to use build nodes
+$ convox apps params set BuildLabels=convox.io/node-group=build -a myapp
+
+# Result: myapp builds run on dedicated build nodes
+```
+
+<Note>
+  App parameters provide fine-grained control while rack parameters set the overall infrastructure capabilities.
+</Note>
+
+## Related Documentation
+
+<CardGroup cols={3}>
+  <Card title="Rack Parameters" icon="server" href="/configuration/rack-parameters">
+    Configure infrastructure-level settings
+  </Card>
+  <Card title="AWS App Parameters" icon="aws" href="/configuration/app-parameters/aws">
+    Detailed AWS app parameter reference
+  </Card>
+  <Card title="Building Applications" icon="hammer" href="/deployment/builds">
+    Understanding the build process
+  </Card>
+</CardGroup>

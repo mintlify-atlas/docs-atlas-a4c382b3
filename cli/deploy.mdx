@@ -1,0 +1,298 @@
+---
+title: deploy
+description: Build and promote your application in a single command
+---
+
+The `deploy` command creates a new build from your source code and automatically promotes it to your application. This is the primary command for deploying changes to production.
+
+## Usage
+
+```bash
+convox deploy [dir]
+```
+
+### Arguments
+
+<ParamField path="dir" type="string" default=".">
+  Directory containing the application source code (defaults to current directory)
+</ParamField>
+
+## Flags
+
+<ParamField path="--app" type="string" default="-a">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string" default="-r">
+  Rack name
+</ParamField>
+
+<ParamField path="--description" type="string">
+  Description for the deployment
+</ParamField>
+
+<ParamField path="--manifest" type="string">
+  Path to manifest file (default: convox.yml)
+</ParamField>
+
+<ParamField path="--no-cache" type="boolean">
+  Build without using cache
+</ParamField>
+
+<ParamField path="--id" type="boolean">
+  Output only the release ID
+</ParamField>
+
+<ParamField path="--build-args" type="string">
+  Build-time environment variables (can be specified multiple times)
+</ParamField>
+
+<ParamField path="--force" type="boolean">
+  Force promotion even if no changes detected
+</ParamField>
+
+## Examples
+
+### Basic Deployment
+
+Deploy your application from the current directory:
+
+```bash
+$ convox deploy
+Packaging source... OK
+Uploading source... OK
+Starting build... OK
+Authenticating https://index.docker.io/v1/: Login Succeeded
+Authenticating 1234567890.dkr.ecr.us-east-1.amazonaws.com: Login Succeeded
+Building: .
+Step 1/10 : FROM node:16-alpine
+...
+Running: docker tag convox/myapp:web.BABCDEFGHI 1234567890.dkr.ecr.us-east-1.amazonaws.com/myapp:web.BABCDEFGHI
+Running: docker push 1234567890.dkr.ecr.us-east-1.amazonaws.com/myapp:web.BABCDEFGHI
+Promoting RABCDEFGHI...
+2020-01-31T15:41:16Z system/cloudformation aws/cfm myapp UPDATE_IN_PROGRESS
+2020-01-31T15:41:27Z system/cloudformation aws/cfm myapp UPDATE_COMPLETE
+OK
+```
+
+### Deploy with Description
+
+Add a description to track your deployments:
+
+```bash
+$ convox deploy --description "Add user authentication"
+Packaging source... OK
+Uploading source... OK
+Starting build... OK
+...
+Promoting RABCDEFGHI...
+OK
+```
+
+### Deploy with Build Arguments
+
+Pass build-time environment variables:
+
+```bash
+$ convox deploy --build-args "NODE_ENV=production" --build-args "API_VERSION=v2"
+Packaging source... OK
+Uploading source... OK
+Starting build... OK
+...
+Promoting RABCDEFGHI...
+OK
+```
+
+### Deploy Without Cache
+
+Force a clean build without using cached layers:
+
+```bash
+$ convox deploy --no-cache
+Packaging source... OK
+Uploading source... OK
+Starting build... OK
+...
+Promoting RABCDEFGHI...
+OK
+```
+
+### Deploy from Specific Directory
+
+Deploy from a directory other than the current one:
+
+```bash
+$ convox deploy /path/to/myapp
+Packaging source... OK
+Uploading source... OK
+Starting build... OK
+...
+Promoting RABCDEFGHI...
+OK
+```
+
+### Get Only Release ID
+
+Output only the release ID for use in scripts:
+
+```bash
+$ RELEASE=$(convox deploy --id)
+$ echo "Deployed release: $RELEASE"
+```
+
+## Deployment Process
+
+The deploy command performs the following steps:
+
+1. **Build Phase**
+   - Package source code
+   - Upload to rack
+   - Build Docker images
+   - Push images to registry
+   - Create new release
+
+2. **Promotion Phase**
+   - Update infrastructure (load balancers, services)
+   - Roll out new containers
+   - Monitor deployment status
+   - Complete when all services are healthy
+
+## Monitoring Deployments
+
+The command streams deployment logs showing:
+
+- Build progress
+- CloudFormation stack updates
+- Service status changes
+- Health check results
+
+### Example Output During Promotion
+
+```bash
+Promoting RABCDEFGHI...
+2020-01-31T15:41:16Z system/cloudformation aws/cfm myapp-ServiceWeb UPDATE_IN_PROGRESS
+2020-01-31T15:41:20Z system/cloudformation aws/cfm myapp-ServiceWeb UPDATE_COMPLETE
+2020-01-31T15:41:27Z system/cloudformation aws/cfm myapp UPDATE_COMPLETE
+OK
+```
+
+## Rollback
+
+If a deployment fails or causes issues, you can quickly rollback to a previous release:
+
+```bash
+# List releases to find the previous one
+convox releases
+
+# Promote the previous release
+convox releases promote RPREVIOUSID
+```
+
+## Best Practices
+
+### 1. Use Descriptive Messages
+
+Always include a description to track what changed:
+
+```bash
+convox deploy --description "Fix payment processing bug #123"
+```
+
+### 2. Test Before Deploying
+
+Run tests in a staging environment first:
+
+```bash
+# Deploy to staging
+convox deploy --rack staging --app myapp-staging
+
+# Run tests
+convox run web --app myapp-staging npm test
+
+# Deploy to production
+convox deploy --rack production --app myapp
+```
+
+### 3. Monitor After Deployment
+
+Watch logs after deploying:
+
+```bash
+# In another terminal
+convox logs --follow
+```
+
+### 4. Use CI/CD Integration
+
+Automate deployments in your CI/CD pipeline:
+
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Deploy to Convox
+        run: |
+          curl -L https://convox.com/cli/install.sh | sh
+          convox deploy --rack production --app myapp --description "${{ github.event.head_commit.message }}"
+        env:
+          CONVOX_PASSWORD: ${{ secrets.CONVOX_PASSWORD }}
+```
+
+## Troubleshooting
+
+### Build Failures
+
+If the build fails:
+
+1. Check build logs for errors
+2. Verify Dockerfile syntax
+3. Ensure all dependencies are available
+4. Try `--no-cache` to eliminate cache issues
+
+### Deployment Failures
+
+If the promotion fails:
+
+1. Check service health checks
+2. Verify environment variables are set correctly
+3. Review CloudFormation events for infrastructure issues
+4. Check resource limits (CPU, memory)
+
+### Slow Deployments
+
+If deployments are slow:
+
+1. Optimize Dockerfile layers for better caching
+2. Use `.dockerignore` to exclude unnecessary files
+3. Consider using a Docker registry closer to your rack
+4. Check for large file uploads
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="Build" icon="hammer" href="/cli/build">
+    Create a build without promoting
+  </Card>
+  <Card title="Releases" icon="history" href="/cli/apps">
+    View and manage releases
+  </Card>
+  <Card title="Logs" icon="scroll" href="/cli/logs">
+    Monitor deployment logs
+  </Card>
+  <Card title="PS" icon="list" href="/cli/ps">
+    Check process status
+  </Card>
+</CardGroup>
+
+## Version Requirements
+
+<ParamField path="Build args" type="feature">
+  Requires Convox CLI and rack version >= 3.7.2
+</ParamField>

@@ -1,0 +1,649 @@
+---
+title: "Google Cloud Platform (GCP)"
+description: "Install and configure Convox on Google Cloud Platform with GKE"
+---
+
+# Google Cloud Platform (GCP)
+
+Deploy Convox on Google Cloud Platform using Google Kubernetes Engine (GKE) for a fully-managed Kubernetes experience with Google's infrastructure.
+
+<Note>
+The easiest way to install a Rack is with the [Convox Web Console](https://console.convox.com). These instructions are for command-line installation.
+</Note>
+
+## Prerequisites
+
+Before installing Convox on GCP, ensure you have the following tools installed and configured:
+
+<Steps>
+  <Step title="Install Google Cloud CLI">
+    Download and install the `gcloud` CLI to interact with GCP services.
+    
+    ```bash
+    # macOS
+    brew install google-cloud-sdk
+    
+    # Linux
+    curl https://sdk.cloud.google.com | bash
+    exec -l $SHELL
+    ```
+    
+    Initialize the CLI:
+    ```bash
+    gcloud init
+    ```
+    
+    [Google Cloud CLI Installation Guide](https://cloud.google.com/sdk/docs/#install_the_latest_cloud_tools_version_cloudsdk_current_version)
+  </Step>
+
+  <Step title="Install Terraform">
+    Convox uses Terraform to provision GCP infrastructure.
+    
+    ```bash
+    # macOS
+    brew tap hashicorp/tap
+    brew install hashicorp/tap/terraform
+    
+    # Linux
+    wget https://releases.hashicorp.com/terraform/1.6.0/terraform_1.6.0_linux_amd64.zip
+    unzip terraform_1.6.0_linux_amd64.zip
+    sudo mv terraform /usr/local/bin/
+    ```
+    
+    [Terraform Installation Guide](https://learn.hashicorp.com/terraform/getting-started/install.html)
+  </Step>
+
+  <Step title="Install Convox CLI">
+    Install the Convox CLI to manage your racks and applications.
+    
+    ```bash
+    # macOS
+    curl -L https://github.com/convox/convox/releases/latest/download/convox-macos -o /tmp/convox
+    
+    # Linux
+    curl -L https://github.com/convox/convox/releases/latest/download/convox-linux -o /tmp/convox
+    
+    sudo mv /tmp/convox /usr/local/bin/convox
+    sudo chmod 755 /usr/local/bin/convox
+    ```
+    
+    [Convox CLI Documentation](/installation/cli)
+  </Step>
+</Steps>
+
+## GCP Project Configuration
+
+Convox requires a GCP project with appropriate APIs enabled and service account credentials.
+
+### Required Environment Variables
+
+<ParamField path="GOOGLE_PROJECT" type="string" required>
+  Your GCP project ID
+</ParamField>
+
+<ParamField path="GOOGLE_CREDENTIALS" type="string" required>
+  Path to service account key JSON file
+</ParamField>
+
+### Create GCP Project
+
+<Steps>
+  <Step title="Create a new project">
+    ```bash
+    gcloud projects create <project-id> --set-as-default
+    ```
+    
+    Replace `<project-id>` with your desired project ID.
+    
+    ```bash
+    export GOOGLE_PROJECT=<project-id>
+    ```
+  </Step>
+  
+  <Step title="Enable billing">
+    <Warning>
+    You must enable billing before proceeding. GKE and other services require a billing account.
+    </Warning>
+    
+    Visit [Google Cloud Console - Billing](https://console.cloud.google.com/billing) to set up billing for your project.
+  </Step>
+</Steps>
+
+### Create Service Account
+
+Create a service account with owner permissions:
+
+```bash
+# Set project ID
+export GOOGLE_PROJECT=your-project-id
+
+# Create service account
+gcloud iam service-accounts create convox \
+  --display-name="Convox Service Account"
+
+# Define service account email
+export SERVICE_ACCOUNT="convox@${GOOGLE_PROJECT}.iam.gserviceaccount.com"
+
+# Create and download key
+gcloud iam service-accounts keys create ~/.gcloud.convox \
+  --iam-account="${SERVICE_ACCOUNT}"
+
+# Export credentials path
+export GOOGLE_CREDENTIALS="$HOME/.gcloud.convox"
+```
+
+### Grant Permissions
+
+Grant the service account owner role on the project:
+
+```bash
+gcloud projects add-iam-policy-binding ${GOOGLE_PROJECT} \
+  --member="serviceAccount:${SERVICE_ACCOUNT}" \
+  --role="roles/owner"
+```
+
+<Warning>
+Store your service account key securely. Never commit it to version control.
+</Warning>
+
+## Enable Required GCP APIs
+
+Convox requires several GCP APIs to be enabled:
+
+```bash
+# Core APIs
+gcloud services enable cloudapis.googleapis.com
+gcloud services enable compute.googleapis.com
+gcloud services enable cloudresourcemanager.googleapis.com
+gcloud services enable container.googleapis.com
+gcloud services enable serviceusage.googleapis.com
+gcloud services enable servicemanagement.googleapis.com
+
+# Additional useful APIs
+gcloud services enable logging.googleapis.com
+gcloud services enable monitoring.googleapis.com
+```
+
+<Note>
+API enablement may take a few minutes to propagate across GCP.
+</Note>
+
+## Installation
+
+Install a Convox Rack on GCP using the CLI:
+
+```bash
+convox rack install gcp <rack-name> [param1=value1] [param2=value2]...
+```
+
+### Basic Installation
+
+```bash
+# Install with default settings
+convox rack install gcp production
+
+# Install in specific region
+convox rack install gcp production region=us-west1
+
+# Install with custom node type
+convox rack install gcp production region=europe-west1 node_type=n1-standard-2
+```
+
+### Installation Examples
+
+<CodeGroup>
+```bash Development
+# Cost-optimized development rack
+convox rack install gcp dev \
+  region=us-central1 \
+  node_type=n1-standard-1 \
+  preemptible=true
+```
+
+```bash Production
+# Production rack with standard instances
+convox rack install gcp production \
+  region=us-east1 \
+  node_type=n1-standard-2 \
+  preemptible=false
+```
+
+```bash High-Performance
+# High-performance compute
+convox rack install gcp compute \
+  region=us-west1 \
+  node_type=n1-highcpu-4 \
+  preemptible=false
+```
+</CodeGroup>
+
+## Configuration Parameters
+
+Convox on GCP supports the following configuration parameters:
+
+### Region Configuration
+
+<ParamField path="region" type="string" default="us-east1">
+  GCP region where the rack will be deployed
+  
+  **Popular Regions:**
+  - `us-east1` - South Carolina (default)
+  - `us-west1` - Oregon
+  - `us-central1` - Iowa
+  - `europe-west1` - Belgium
+  - `europe-west2` - London
+  - `asia-east1` - Taiwan
+  - `asia-northeast1` - Tokyo
+  - `australia-southeast1` - Sydney
+  
+  ```bash
+  convox rack install gcp mystack region=europe-west1
+  ```
+  
+  [View all GCP regions](https://cloud.google.com/compute/docs/regions-zones)
+</ParamField>
+
+### Node Configuration
+
+<ParamField path="node_type" type="string" default="n1-standard-1">
+  GCE machine type for GKE nodes
+  
+  **Common Machine Types:**
+  
+  **General Purpose (n1-standard):**
+  - `n1-standard-1` - 1 vCPU, 3.75 GB RAM (cost-effective)
+  - `n1-standard-2` - 2 vCPU, 7.5 GB RAM (balanced)
+  - `n1-standard-4` - 4 vCPU, 15 GB RAM (general purpose)
+  
+  **High Memory (n1-highmem):**
+  - `n1-highmem-2` - 2 vCPU, 13 GB RAM
+  - `n1-highmem-4` - 4 vCPU, 26 GB RAM
+  
+  **High CPU (n1-highcpu):**
+  - `n1-highcpu-2` - 2 vCPU, 1.8 GB RAM
+  - `n1-highcpu-4` - 4 vCPU, 3.6 GB RAM
+  
+  **E2 (Cost-Optimized):**
+  - `e2-standard-2` - 2 vCPU, 8 GB RAM
+  - `e2-standard-4` - 4 vCPU, 16 GB RAM
+  
+  **N2 (Next Generation):**
+  - `n2-standard-2` - 2 vCPU, 8 GB RAM
+  - `n2-standard-4` - 4 vCPU, 16 GB RAM
+  
+  ```bash
+  convox rack install gcp mystack node_type=n1-standard-2
+  ```
+  
+  [View all machine types](https://cloud.google.com/compute/docs/machine-types)
+</ParamField>
+
+<ParamField path="preemptible" type="boolean" default={true}>
+  Use preemptible VM instances for significant cost savings
+  
+  **Preemptible instances:**
+  - Up to 80% cheaper than regular instances
+  - Can be terminated by GCP at any time
+  - Automatically restarted by GKE
+  - Maximum runtime of 24 hours
+  
+  <Warning>
+  Preemptible instances are **recommended for development** but use caution in production. For production workloads, consider setting `preemptible=false` or using a mixed node pool strategy.
+  </Warning>
+  
+  ```bash
+  # Production with standard instances
+  convox rack install gcp production preemptible=false
+  
+  # Development with preemptible instances
+  convox rack install gcp dev preemptible=true
+  ```
+  
+  [Learn about preemptible VMs](https://cloud.google.com/compute/docs/instances/preemptible)
+</ParamField>
+
+### SSL/TLS Configuration
+
+<ParamField path="cert_duration" type="string" default="2160h">
+  Certificate renewal period (90 days by default)
+  
+  Convox automatically manages TLS certificates for your applications using Let's Encrypt.
+  
+  **Duration Format:**
+  - `720h` - 30 days
+  - `2160h` - 90 days (recommended)
+  - `4320h` - 180 days
+  
+  ```bash
+  convox rack install gcp mystack cert_duration=720h
+  ```
+</ParamField>
+
+### Logging Configuration
+
+<ParamField path="syslog" type="string">
+  Forward logs to an external syslog endpoint
+  
+  **Supported Protocols:**
+  - `tcp+tls://hostname:port` - TLS-encrypted TCP (recommended)
+  - `tcp://hostname:port` - Unencrypted TCP
+  - `udp://hostname:port` - UDP
+  
+  **Popular Syslog Services:**
+  - Papertrail: `tcp+tls://logsN.papertrailapp.com:XXXXX`
+  - Loggly: `tcp+tls://logs-01.loggly.com:6514`
+  - Splunk Cloud: `tcp+tls://inputs.splunk.com:514`
+  
+  ```bash
+  convox rack install gcp mystack syslog=tcp+tls://logs.example.com:514
+  ```
+</ParamField>
+
+## Infrastructure Components
+
+When you install Convox on GCP, Terraform provisions:
+
+### Networking
+- **VPC Network** with auto-mode subnets
+- **Firewall Rules** for cluster communication
+- **Cloud NAT** for outbound internet access
+- **Cloud Router** for dynamic routing
+
+### Compute
+- **GKE Cluster** (Kubernetes control plane)
+- **Node Pool** with auto-scaling
+- **Compute Engine Instances** for worker nodes
+
+### Storage
+- **Cloud Storage Bucket** for build artifacts
+- **Container Registry** for Docker images
+- **Persistent Disks** for node storage
+
+### Load Balancing
+- **Cloud Load Balancer** for ingress traffic
+- **Backend Services** for routing
+
+### IAM & Security
+- **Service Accounts** for cluster and nodes
+- **IAM Roles** for resource access
+
+### Monitoring & Logging
+- **Cloud Logging** for application logs
+- **Cloud Monitoring** for metrics
+- **Fluentd** for log aggregation
+
+## Service Account Permissions
+
+The service account requires these IAM roles:
+- `roles/owner` - Full project access (for installation)
+
+Alternatively, you can use a more restricted set of roles:
+- `roles/compute.admin` - Compute resources
+- `roles/container.admin` - GKE clusters
+- `roles/iam.serviceAccountAdmin` - Service account management
+- `roles/resourcemanager.projectIamAdmin` - IAM policy management
+- `roles/storage.admin` - Cloud Storage
+
+## Cost Optimization
+
+<CardGroup cols={2}>
+  <Card title="Preemptible Instances" icon="dollar-sign">
+    ```bash
+    convox rack install gcp production \
+      preemptible=true
+    ```
+    
+    Save up to 80% on compute costs with preemptible VMs
+  </Card>
+  
+  <Card title="E2 Machine Types" icon="microchip">
+    ```bash
+    convox rack install gcp production \
+      node_type=e2-standard-2
+    ```
+    
+    E2 machines are cost-optimized and up to 31% cheaper than N1
+  </Card>
+  
+  <Card title="Regional Clusters" icon="earth-americas">
+    Choose regions with lower pricing:
+    - `us-central1` (Iowa) - typically cheapest US region
+    - `europe-west1` (Belgium) - good EU pricing
+  </Card>
+  
+  <Card title="Right-Sizing" icon="gauge-high">
+    Start with smaller instance types:
+    ```bash
+    convox rack install gcp dev \
+      node_type=n1-standard-1
+    ```
+    
+    Scale up as needed
+  </Card>
+</CardGroup>
+
+## Production Best Practices
+
+<Steps>
+  <Step title="Use Standard Instances">
+    ```bash
+    convox rack install gcp production preemptible=false
+    ```
+    
+    For production workloads, use standard (non-preemptible) instances to avoid unexpected terminations.
+  </Step>
+  
+  <Step title="Choose Appropriate Machine Types">
+    ```bash
+    convox rack install gcp production \
+      node_type=n1-standard-2
+    ```
+    
+    Select machine types that match your workload requirements:
+    - General apps: `n1-standard-2` or `n2-standard-2`
+    - Memory-intensive: `n1-highmem-2`
+    - CPU-intensive: `n1-highcpu-4`
+  </Step>
+  
+  <Step title="Enable Logging">
+    ```bash
+    convox rack install gcp production \
+      syslog=tcp+tls://logs.example.com:514
+    ```
+    
+    Forward logs to an external service for long-term retention and analysis.
+  </Step>
+  
+  <Step title="Select Appropriate Region">
+    ```bash
+    convox rack install gcp production \
+      region=us-east1
+    ```
+    
+    Choose a region close to your users for lower latency.
+  </Step>
+  
+  <Step title="Document Configuration">
+    Keep a record of your rack configuration:
+    
+    ```bash
+    convox rack params -r production > production-params.txt
+    ```
+  </Step>
+</Steps>
+
+## Updating Rack Parameters
+
+After installation, you can update rack parameters:
+
+```bash
+# View current parameters
+convox rack params -r production
+
+# Update a parameter
+convox rack params set node_type=n1-standard-2 -r production
+
+# Update multiple parameters
+convox rack params set node_type=n1-standard-2 preemptible=false -r production
+```
+
+<Warning>
+Some parameter changes may require rack recreation. Review the documentation before making changes.
+</Warning>
+
+## Troubleshooting
+
+### Installation Issues
+
+<Accordion title="API not enabled errors">
+  **Error:** `API [service] not enabled on project`
+  
+  **Solution:**
+  ```bash
+  # Enable the specific API
+  gcloud services enable container.googleapis.com
+  
+  # Or enable all required APIs
+  gcloud services enable cloudapis.googleapis.com compute.googleapis.com \
+    cloudresourcemanager.googleapis.com container.googleapis.com \
+    serviceusage.googleapis.com servicemanagement.googleapis.com
+  ```
+</Accordion>
+
+<Accordion title="Billing not enabled">
+  **Error:** `Project has no billing account` or similar
+  
+  **Solution:**
+  1. Visit [Google Cloud Console - Billing](https://console.cloud.google.com/billing)
+  2. Link a billing account to your project
+  3. Wait a few minutes for billing to activate
+  4. Retry the installation
+</Accordion>
+
+<Accordion title="Insufficient permissions">
+  **Error:** `Permission denied` or `forbidden` errors
+  
+  **Solution:**
+  Verify service account has owner role:
+  ```bash
+  gcloud projects get-iam-policy ${GOOGLE_PROJECT} \
+    --flatten="bindings[].members" \
+    --filter="bindings.members:serviceAccount:convox@*"
+  ```
+  
+  If not listed, re-run:
+  ```bash
+  gcloud projects add-iam-policy-binding ${GOOGLE_PROJECT} \
+    --member="serviceAccount:${SERVICE_ACCOUNT}" \
+    --role="roles/owner"
+  ```
+</Accordion>
+
+<Accordion title="Quota exceeded">
+  **Error:** `Quota exceeded` for specific resources
+  
+  **Solution:**
+  1. Check your quotas in [GCP Console - Quotas](https://console.cloud.google.com/iam-admin/quotas)
+  2. Request quota increase if needed
+  3. Or choose a different region/machine type with available quota
+</Accordion>
+
+### Runtime Issues
+
+<Accordion title="Preemptible instances terminated">
+  **Issue:** Preemptible nodes frequently terminated
+  
+  **Solution:**
+  - This is expected behavior for preemptible instances
+  - GKE automatically restarts pods on new nodes
+  - For critical workloads, switch to standard instances:
+    ```bash
+    convox rack params set preemptible=false -r production
+    ```
+</Accordion>
+
+<Accordion title="Node pool scaling issues">
+  **Issue:** Nodes not scaling as expected
+  
+  **Solution:**
+  - Check GKE Auto Scaling settings in GCP Console
+  - Verify project quotas for Compute Engine
+  - Review GKE cluster events:
+    ```bash
+    kubectl get events --sort-by='.lastTimestamp'
+    ```
+</Accordion>
+
+<Accordion title="Load balancer not responding">
+  **Issue:** Cannot access applications via load balancer
+  
+  **Solution:**
+  - Check firewall rules allow inbound traffic
+  - Verify backend service health in GCP Console
+  - Check application logs:
+    ```bash
+    convox logs -a myapp
+    ```
+</Accordion>
+
+## GCP Regions and Zones
+
+Choose a region based on your requirements:
+
+### Americas
+- **us-east1** (South Carolina)
+- **us-east4** (Northern Virginia)
+- **us-central1** (Iowa) - typically lowest cost
+- **us-west1** (Oregon)
+- **us-west2** (Los Angeles)
+- **us-west3** (Salt Lake City)
+- **us-west4** (Las Vegas)
+- **northamerica-northeast1** (Montreal)
+- **southamerica-east1** (São Paulo)
+
+### Europe
+- **europe-west1** (Belgium)
+- **europe-west2** (London)
+- **europe-west3** (Frankfurt)
+- **europe-west4** (Netherlands)
+- **europe-west6** (Zurich)
+- **europe-north1** (Finland)
+
+### Asia Pacific
+- **asia-east1** (Taiwan)
+- **asia-east2** (Hong Kong)
+- **asia-northeast1** (Tokyo)
+- **asia-northeast2** (Osaka)
+- **asia-northeast3** (Seoul)
+- **asia-south1** (Mumbai)
+- **asia-southeast1** (Singapore)
+- **australia-southeast1** (Sydney)
+
+[View complete list of regions](https://cloud.google.com/compute/docs/regions-zones)
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Deploy an Application" icon="rocket" href="/deployment/deploying-changes">
+    Learn how to deploy your first application to your new rack
+  </Card>
+  
+  <Card title="Configure Resources" icon="database" href="/reference/primitives/app/resource">
+    Set up databases, Redis, and other resources
+  </Card>
+  
+  <Card title="Custom Domains" icon="globe" href="/deployment/custom-domains">
+    Configure custom domains and SSL certificates
+  </Card>
+  
+  <Card title="Rack Management" icon="gears" href="/management/cli-rack-management">
+    Learn how to manage and update your rack
+  </Card>
+</CardGroup>
+
+## Additional Resources
+
+- [GCP Rack Parameters](/configuration/rack-parameters/gcp) - Complete parameter reference
+- [GKE Best Practices](https://cloud.google.com/kubernetes-engine/docs/best-practices) - Google's official guide
+- [Convox Troubleshooting](/help/troubleshooting) - Common issues and solutions
+- [Community Forum](https://community.convox.com) - Get help from the community

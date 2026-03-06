@@ -1,0 +1,419 @@
+---
+title: "Memcached"
+description: "Memcached cache resources for your Convox applications"
+---
+
+## Overview
+
+Memcached is a high-performance, distributed memory caching system. Convox supports both containerized Memcached and AWS ElastiCache-managed instances.
+
+## Basic Configuration
+
+Define a Memcached resource in `convox.yml`:
+
+```yaml
+resources:
+  cache:
+    type: memcached
+
+services:
+  web:
+    resources:
+      - cache
+```
+
+## Containerized Memcached
+
+For development and staging environments, use containerized Memcached:
+
+```yaml
+resources:
+  cache:
+    type: memcached
+```
+
+### Custom Images
+
+Use custom Memcached images:
+
+```yaml
+resources:
+  cache:
+    type: memcached
+    image: memcached:1.6-alpine
+```
+
+<Note>
+The `image` field allows you to use any compatible Memcached image. Always include an image tag.
+</Note>
+
+## AWS ElastiCache Memcached
+
+For production workloads requiring horizontal scaling, use AWS ElastiCache:
+
+```yaml
+resources:
+  cache:
+    type: elasticache-memcached
+    options:
+      class: cache.t3.micro
+      version: "1.6.6"
+      nodes: 2
+      deletionProtection: true
+```
+
+### Configuration Options
+
+<ParamField path="nodes" type="integer" required>
+  **Required.** The number of cache nodes in the Memcached cluster. Memcached scales horizontally by adding nodes.
+</ParamField>
+
+<ParamField path="class" type="string" required>
+  The compute and memory capacity per cache node. Common values:
+  - `cache.t3.micro` - 0.5 GiB memory
+  - `cache.t3.small` - 1.37 GiB memory
+  - `cache.t3.medium` - 3.09 GiB memory
+  - `cache.m5.large` - 6.38 GiB memory
+  - `cache.r5.large` - 13.07 GiB memory (memory-optimized)
+</ParamField>
+
+<ParamField path="version" type="string" required>
+  Memcached engine version (e.g., 1.6.6, 1.6.17)
+</ParamField>
+
+<ParamField path="deletionProtection" type="boolean" default="false">
+  Prevent accidental deletion of the cache cluster. This is a Convox-managed feature that prevents resource removal even if deleted from `convox.yml`.
+</ParamField>
+
+<ParamField path="durable" type="boolean" default="false">
+  Spread cache nodes across multiple Availability Zones for improved availability
+</ParamField>
+
+<ParamField path="encrypted" type="boolean" default="false">
+  Enable encryption at rest for data stored on disk
+</ParamField>
+
+<ParamField path="autoMinorVersionUpgrade" type="boolean" default="true">
+  Automatically apply minor engine version patches during maintenance windows
+</ParamField>
+
+<ParamField path="import" type="string">
+  ElastiCache cluster ID to import an existing cluster
+</ParamField>
+
+<Warning>
+`deletionProtection` is a Convox feature, not an AWS feature. It prevents the resource from being deleted if removed from `convox.yml`.
+</Warning>
+
+<Note>
+The `nodes` parameter is **required** for ElastiCache Memcached. Set it to the desired number of cache nodes for your cluster.
+</Note>
+
+## Advanced Features
+
+### Horizontal Scaling
+
+Memcached scales horizontally by adding more nodes:
+
+```yaml
+resources:
+  cache:
+    type: elasticache-memcached
+    options:
+      class: cache.t3.medium
+      version: "1.6.17"
+      nodes: 3
+      durable: true
+```
+
+<Note>
+To scale up, increase the `nodes` value and redeploy. To scale down, decrease the value. Total cache capacity = (node memory) × (number of nodes).
+</Note>
+
+### Multi-AZ Deployment
+
+Distribute nodes across Availability Zones for improved availability:
+
+```yaml
+resources:
+  cache:
+    type: elasticache-memcached
+    options:
+      class: cache.m5.large
+      version: "1.6.17"
+      nodes: 2
+      durable: true
+      deletionProtection: true
+```
+
+### Import Existing ElastiCache
+
+Import an existing AWS ElastiCache Memcached cluster:
+
+```yaml
+resources:
+  imported-cache:
+    type: elasticache-memcached
+    options:
+      import: my-existing-memcached-cluster
+      nodes: 2
+
+services:
+  web:
+    resources:
+      - imported-cache
+```
+
+<ParamField path="import" type="string">
+  The cluster ID of the existing ElastiCache Memcached cluster
+</ParamField>
+
+<Note>
+While `import` is set, the cache cluster is read-only from Convox's perspective. Remove `import` to allow Convox to manage the cluster configuration.
+</Note>
+
+## Environment Variables
+
+When linked to a service, Memcached resources inject these environment variables:
+
+```bash
+CACHE_URL=memcached://hostname:11211
+CACHE_HOST=hostname
+CACHE_PORT=11211
+```
+
+For multi-node clusters, the URL may include multiple endpoints:
+
+```bash
+CACHE_URL=memcached://node1:11211,node2:11211,node3:11211
+```
+
+## CLI Operations
+
+### List Resources
+
+```bash
+$ convox resources -a myapp
+NAME   TYPE                   URL
+cache  elasticache-memcached  memcached://hostname:11211
+```
+
+### Get Resource Information
+
+```bash
+$ convox resources info cache -a myapp
+Name  cache
+Type  elasticache-memcached
+URL   memcached://hostname:11211
+```
+
+### Proxy to Memcached
+
+Create a local tunnel to the Memcached cluster:
+
+```bash
+$ convox resources proxy cache -a myapp
+Proxying localhost:11211 to hostname:11211
+```
+
+Connect using telnet:
+
+```bash
+telnet localhost 11211
+```
+
+<Note>
+The `proxy` command is particularly useful for ElastiCache instances that are not publicly accessible.
+</Note>
+
+## Connection Examples
+
+<Tabs>
+  <Tab title="Node.js">
+    ```javascript
+    const Memcached = require('memcached');
+    
+    // Parse the CACHE_URL to get host(s)
+    const cacheUrl = process.env.CACHE_URL.replace('memcached://', '');
+    const memcached = new Memcached(cacheUrl);
+    
+    memcached.set('key', 'value', 3600, (err) => {
+      if (err) console.error(err);
+    });
+    
+    memcached.get('key', (err, data) => {
+      console.log(data);
+    });
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    from pymemcache.client.base import Client
+    import os
+    
+    # Parse CACHE_HOST from environment
+    host = os.environ['CACHE_HOST']
+    port = int(os.environ['CACHE_PORT'])
+    
+    client = Client((host, port))
+    
+    client.set('key', 'value', expire=3600)
+    value = client.get('key')
+    ```
+  </Tab>
+  <Tab title="Ruby">
+    ```ruby
+    require 'dalli'
+    
+    # Parse CACHE_URL
+    cache_url = ENV['CACHE_URL'].gsub('memcached://', '')
+    
+    dc = Dalli::Client.new(cache_url)
+    
+    dc.set('key', 'value', 3600)
+    value = dc.get('key')
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    <?php
+    $memcached = new Memcached();
+    
+    // Parse CACHE_HOST and CACHE_PORT
+    $host = getenv('CACHE_HOST');
+    $port = intval(getenv('CACHE_PORT'));
+    
+    $memcached->addServer($host, $port);
+    
+    $memcached->set('key', 'value', 3600);
+    $value = $memcached->get('key');
+    ?>
+    ```
+  </Tab>
+</Tabs>
+
+## Memcached vs Redis
+
+Choose Memcached when:
+
+<CardGroup cols={2}>
+  <Card title="Simple Caching" icon="layer-group">
+    You need simple key-value storage without complex data structures
+  </Card>
+  <Card title="Horizontal Scaling" icon="arrows-left-right">
+    You want to scale by adding more nodes (Memcached's strength)
+  </Card>
+  <Card title="Multi-threaded" icon="microchip">
+    You want to take advantage of multi-core processors
+  </Card>
+  <Card title="Large Cache" icon="database">
+    You need to cache large amounts of data across multiple nodes
+  </Card>
+</CardGroup>
+
+Choose Redis when:
+
+<CardGroup cols={2}>
+  <Card title="Complex Data Types" icon="shapes">
+    You need lists, sets, sorted sets, or other data structures
+  </Card>
+  <Card title="Persistence" icon="floppy-disk">
+    You need data persistence or replication
+  </Card>
+  <Card title="Pub/Sub" icon="broadcast-tower">
+    You need publish/subscribe messaging patterns
+  </Card>
+  <Card title="Transactions" icon="code-branch">
+    You need atomic operations or transactions
+  </Card>
+</CardGroup>
+
+## Production Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Enable Deletion Protection" icon="shield-check">
+    Set `deletionProtection: true` to prevent accidental deletion of production cache clusters.
+  </Card>
+  <Card title="Use Multiple Nodes" icon="server">
+    Deploy at least 2 nodes for better availability and horizontal scaling.
+  </Card>
+  <Card title="Enable Multi-AZ" icon="globe">
+    Set `durable: true` to distribute nodes across Availability Zones.
+  </Card>
+  <Card title="Monitor Memory Usage" icon="chart-line">
+    Track cache hit rates and memory usage to optimize node count and size.
+  </Card>
+</CardGroup>
+
+## Common Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Page Caching" icon="file">
+    Cache rendered HTML pages to reduce server load and improve response times.
+  </Card>
+  <Card title="Database Query Cache" icon="database">
+    Store frequently accessed database query results.
+  </Card>
+  <Card title="Session Storage" icon="user">
+    Store user session data across multiple web servers.
+  </Card>
+  <Card title="API Response Cache" icon="code">
+    Cache external API responses to reduce latency and API costs.
+  </Card>
+</CardGroup>
+
+## Example Configurations
+
+<Tabs>
+  <Tab title="Development">
+    ```yaml
+    resources:
+      cache:
+        type: memcached
+    
+    services:
+      web:
+        resources:
+          - cache
+    ```
+  </Tab>
+  <Tab title="Staging">
+    ```yaml
+    resources:
+      cache:
+        type: elasticache-memcached
+        options:
+          class: cache.t3.small
+          version: "1.6.17"
+          nodes: 2
+    
+    services:
+      web:
+        resources:
+          - cache
+    ```
+  </Tab>
+  <Tab title="Production">
+    ```yaml
+    resources:
+      cache:
+        type: elasticache-memcached
+        options:
+          class: cache.m5.large
+          version: "1.6.17"
+          nodes: 3
+          durable: true
+          deletionProtection: true
+          encrypted: true
+          autoMinorVersionUpgrade: true
+    
+    services:
+      web:
+        resources:
+          - cache
+      worker:
+        resources:
+          - cache
+    ```
+  </Tab>
+</Tabs>

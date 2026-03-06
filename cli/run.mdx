@@ -1,0 +1,432 @@
+---
+title: run
+description: Execute commands in new one-off processes
+---
+
+The `run` command executes a command in a new container process. This is useful for running migrations, scripts, interactive shells, and other one-off tasks within your application environment.
+
+## Usage
+
+```bash
+convox run <service> <command>
+```
+
+### Arguments
+
+<ParamField path="service" type="string" required>
+  Service name from convox.yml
+</ParamField>
+
+<ParamField path="command" type="string" required>
+  Command to execute
+</ParamField>
+
+## Flags
+
+<ParamField path="--app" type="string" default="-a">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string" default="-r">
+  Rack name
+</ParamField>
+
+<ParamField path="--release" type="string">
+  Run against a specific release
+</ParamField>
+
+<ParamField path="--detach" type="boolean" default="-d">
+  Run in detached mode (background)
+</ParamField>
+
+<ParamField path="--entrypoint" type="boolean" default="-e">
+  Use the container's original entrypoint (default: true)
+</ParamField>
+
+<ParamField path="--cpu" type="integer">
+  CPU millicores to allocate
+</ParamField>
+
+<ParamField path="--cpu-limit" type="integer">
+  CPU millicores limit
+</ParamField>
+
+<ParamField path="--memory" type="integer">
+  Memory in MB to allocate
+</ParamField>
+
+<ParamField path="--memory-limit" type="integer">
+  Memory limit in MB
+</ParamField>
+
+<ParamField path="--timeout" type="integer" default="-t">
+  Timeout in seconds (default: 3600)
+</ParamField>
+
+<ParamField path="--gpu" type="integer">
+  Number of GPUs to allocate (requires version >= 3.21.3)
+</ParamField>
+
+<ParamField path="--node-labels" type="string">
+  Node labels for targeting specific node groups (requires version >= 3.21.3)
+</ParamField>
+
+<ParamField path="--use-service-volume" type="boolean">
+  Attach service-configured volumes (requires version >= 3.22.3)
+</ParamField>
+
+## Examples
+
+### Interactive Shell
+
+Start an interactive shell session:
+
+```bash
+$ convox run web sh
+/usr/src/app # ls
+Dockerfile  README.md  package.json  src
+/usr/src/app # node --version
+v16.14.0
+/usr/src/app # exit
+```
+
+For bash:
+
+```bash
+$ convox run web bash
+root@container:/app# 
+```
+
+### Run Migrations
+
+Execute database migrations:
+
+```bash
+# Rails
+$ convox run web bin/rails db:migrate
+Running migrations...
+== CreateUsers: migrating ===
+== CreateUsers: migrated (0.0234s) ===
+
+# Django
+$ convox run web python manage.py migrate
+Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, sessions
+Running migrations:
+  Applying contenttypes.0001_initial... OK
+
+# Node.js with Knex
+$ convox run web npm run migrate
+Batch 1 run: 3 migrations
+```
+
+### Run Scripts
+
+Execute maintenance scripts:
+
+```bash
+$ convox run web node scripts/cleanup.js
+Cleaning up old records...
+Deleted 150 records
+Done!
+```
+
+### Rails Console
+
+```bash
+$ convox run web bin/rails console
+Loading production environment...
+irb(main):001:0> User.count
+=> 1543
+irb(main):002:0> exit
+```
+
+### Run Against Specific Release
+
+Test a command against a previous release:
+
+```bash
+$ convox run --release RABCDEFGHIJ web npm test
+Running test suite...
+✓ All tests passed
+```
+
+### Detached Execution
+
+Run long-running tasks in the background:
+
+```bash
+$ convox run web bin/rails data:import --detach
+Running detached process
+OK, abc123def456
+
+# Check process status
+$ convox ps info abc123def456
+```
+
+## Advanced Features
+
+### GPU Support
+
+Run GPU-accelerated workloads:
+
+```bash
+# Request 1 GPU
+$ convox run web python train-model.py --gpu 1
+
+# Target GPU node group
+$ convox run web python train.py --gpu 1 --node-labels "convox.io/label=gpu-nodes"
+
+# Multiple GPUs with increased memory
+$ convox run worker python batch-process.py --gpu 2 --memory 8192
+```
+
+#### GPU Use Cases
+
+- **Machine Learning**: Train models on-demand
+- **Data Processing**: Process large datasets
+- **Testing**: Test GPU code without deploying
+- **Diagnostics**: Run GPU benchmarks
+
+### Service Volume Access
+
+Access persistent volumes configured for the service:
+
+```bash
+$ convox run web sh --use-service-volume
+/usr/src/app # ls /data
+file1.txt  file2.txt  config.json
+```
+
+#### Volume Use Cases
+
+- **Migrations**: Access shared configuration files
+- **Batch Jobs**: Process data on persistent storage
+- **Debugging**: Inspect volume-mounted data
+- **Maintenance**: Clean up or manipulate files
+- **Zero-Scale**: Access volumes when service is scaled to zero
+
+### Resource Allocation
+
+Specify CPU and memory resources:
+
+```bash
+# High CPU task
+$ convox run web npm run build --cpu 2000 --memory 4096
+
+# With limits
+$ convox run web python process.py \
+  --cpu 1000 --cpu-limit 2000 \
+  --memory 2048 --memory-limit 4096
+```
+
+## Common Workflows
+
+### Database Operations
+
+```bash
+# Create database
+$ convox run web bin/rails db:create
+
+# Run migrations
+$ convox run web bin/rails db:migrate
+
+# Seed database
+$ convox run web bin/rails db:seed
+
+# Reset database (development only!)
+$ convox run web bin/rails db:reset
+```
+
+### Debugging
+
+```bash
+# Check environment variables
+$ convox run web env | grep DATABASE
+
+# Test database connection
+$ convox run web psql $DATABASE_URL -c 'SELECT version();'
+
+# Verify file permissions
+$ convox run web ls -la /app/storage
+
+# Check disk space
+$ convox run web df -h
+```
+
+### Data Import/Export
+
+```bash
+# Import data
+$ cat data.sql | convox run web psql $DATABASE_URL
+
+# Export data
+$ convox run web pg_dump $DATABASE_URL > backup.sql
+
+# Run custom import script
+$ convox run web node scripts/import.js --file data.json
+```
+
+### Testing
+
+```bash
+# Run test suite
+$ convox run web npm test
+
+# Run specific test file
+$ convox run web npm test -- tests/user.test.js
+
+# Run with coverage
+$ convox run web npm run test:coverage
+
+# Linting
+$ convox run web npm run lint
+```
+
+### Administrative Tasks
+
+```bash
+# Clear cache
+$ convox run web bin/rails cache:clear
+
+# Generate report
+$ convox run web python scripts/generate_report.py
+
+# Reindex search
+$ convox run web bin/rails searchkick:reindex:all
+
+# Send test email
+$ convox run web python manage.py sendtestemail admin@example.com
+```
+
+## Best Practices
+
+### 1. Use Specific Services
+
+Always specify the service for clarity:
+
+```bash
+# Good
+convox run web rails console
+
+# Avoid
+convox run rails console  # May fail if service name is unclear
+```
+
+### 2. Set Appropriate Timeouts
+
+For long-running tasks, increase the timeout:
+
+```bash
+$ convox run web python long-import.py --timeout 7200  # 2 hours
+```
+
+### 3. Use Detached Mode for Long Tasks
+
+For tasks that take a long time:
+
+```bash
+$ convox run web bin/rails data:migrate --detach
+```
+
+### 4. Verify Environment
+
+Before running migrations or critical tasks:
+
+```bash
+# Check you're on the right rack/app
+$ convox rack
+$ convox apps info
+
+# Then run the command
+$ convox run web bin/rails db:migrate
+```
+
+### 5. Resource Planning
+
+Allocate appropriate resources:
+
+```bash
+# Light task
+convox run web rake task:simple
+
+# Heavy processing
+convox run web rake task:heavy --cpu 2000 --memory 4096
+```
+
+## Troubleshooting
+
+### Command Not Found
+
+```bash
+# Problem: Command not in PATH
+$ convox run web mycommand
+sh: mycommand: not found
+
+# Solution: Use full path or shell
+$ convox run web /app/bin/mycommand
+$ convox run web bash -c "cd /app && ./mycommand"
+```
+
+### Permission Denied
+
+```bash
+# Problem: Insufficient permissions
+$ convox run web sh
+/app # ./script.sh
+permission denied
+
+# Solution: Make executable or use interpreter
+$ convox run web chmod +x script.sh
+$ convox run web sh script.sh
+```
+
+### Timeout Issues
+
+```bash
+# Problem: Task takes longer than default timeout
+$ convox run web long-task.py
+Error: timeout exceeded
+
+# Solution: Increase timeout or use detached mode
+$ convox run web long-task.py --timeout 7200
+$ convox run web long-task.py --detach
+```
+
+### Volume Access Issues
+
+```bash
+# Problem: Volume not mounted
+$ convox run web ls /data
+ls: /data: No such file or directory
+
+# Solution: Use --use-service-volume flag
+$ convox run web ls /data --use-service-volume
+```
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="Exec" icon="terminal" href="/cli/apps">
+    Execute in running process
+  </Card>
+  <Card title="PS" icon="list" href="/cli/ps">
+    View running processes
+  </Card>
+  <Card title="Scale" icon="chart-line" href="/cli/scale">
+    Manage service resources
+  </Card>
+  <Card title="Logs" icon="scroll" href="/cli/logs">
+    View command output
+  </Card>
+</CardGroup>
+
+## Version Requirements
+
+<ParamField path="GPU support" type="feature">
+  Requires CLI and rack version >= 3.21.3
+</ParamField>
+
+<ParamField path="Service volume support" type="feature">
+  Requires CLI and rack version >= 3.22.3
+</ParamField>

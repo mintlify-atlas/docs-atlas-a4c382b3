@@ -1,0 +1,382 @@
+---
+title: apps
+description: Manage Convox applications
+---
+
+The `apps` command group provides tools for managing applications on your Convox rack. You can create, delete, list, and configure apps, as well as manage app-specific settings like termination protection and parameters.
+
+## apps
+
+List all applications on the current rack.
+
+### Usage
+
+```bash
+convox apps
+```
+
+### Flags
+
+<ParamField path="--rack" type="string">
+  Specify the rack name
+</ParamField>
+
+### Example Output
+
+```bash
+$ convox apps
+APP          STATUS   RELEASE
+myapp        running  RABCDEFGHI
+myapp2       running  RIHGFEDCBA
+```
+
+## apps cancel
+
+Cancel an ongoing app update or deployment.
+
+### Usage
+
+```bash
+convox apps cancel [app]
+```
+
+### Arguments
+
+<ParamField path="app" type="string">
+  Application name (optional, uses current directory app if not specified)
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+### Example
+
+```bash
+$ convox apps cancel
+Cancelling deployment of myapp...
+Rewriting last active release...
+OK
+```
+
+## apps create
+
+Create a new application on the rack.
+
+### Usage
+
+```bash
+convox apps create [name]
+```
+
+### Arguments
+
+<ParamField path="name" type="string">
+  Name for the new application
+</ParamField>
+
+### Flags
+
+<ParamField path="--rack" type="string">
+  Rack to create the app on
+</ParamField>
+
+<ParamField path="--generation" type="string">
+  Application generation (2 or 3)
+</ParamField>
+
+### Example
+
+```bash
+$ convox apps create myapp
+Creating myapp... OK
+```
+
+## apps delete
+
+Delete an application and all its resources.
+
+### Usage
+
+```bash
+convox apps delete <app>
+```
+
+### Arguments
+
+<ParamField path="app" type="string" required>
+  Name of the application to delete
+</ParamField>
+
+### Flags
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+### Example
+
+```bash
+$ convox apps delete myapp
+Deleting myapp... OK
+```
+
+<Note>
+  This operation is destructive and will delete all data associated with the app. Make sure to back up any important data first.
+</Note>
+
+## apps export
+
+Export an application, including its configuration, build, environment, and resources.
+
+### Usage
+
+```bash
+convox apps export [app]
+```
+
+### Arguments
+
+<ParamField path="app" type="string">
+  Application name
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+<ParamField path="--file" type="string" default="-f">
+  Export to file (e.g., myapp.tgz)
+</ParamField>
+
+### Example
+
+```bash
+$ convox apps export --file myapp.tgz
+Exporting app myapp... OK
+Exporting env... OK
+Exporting build BABCDEFGHI... OK
+Exporting resource database... OK
+Packaging export... OK
+```
+
+## apps import
+
+Import an application from an export file.
+
+### Usage
+
+```bash
+convox apps import [app]
+```
+
+### Arguments
+
+<ParamField path="app" type="string">
+  Name for the imported application
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+<ParamField path="--file" type="string" default="-f">
+  Import from file (e.g., myapp.tgz)
+</ParamField>
+
+### Example
+
+```bash
+$ convox apps import myapp2 --file myapp.tgz
+Creating app myapp2... OK
+Importing build... OK, RIHGFEDCBA
+Importing env... OK, RJIHGFEDCB
+Promoting RJIHGFEDCB... OK
+Importing resource database... OK
+```
+
+## apps info
+
+Display detailed information about an application.
+
+### Usage
+
+```bash
+convox apps info [app]
+```
+
+### Arguments
+
+<ParamField path="app" type="string">
+  Application name
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+### Example Output
+
+```bash
+$ convox apps info
+Name        myapp
+Status      running
+Generation  2
+Locked      false
+Release     RABCDEFGHI
+```
+
+## apps lock
+
+Enable termination protection to prevent accidental deletion.
+
+### Usage
+
+```bash
+convox apps lock [app]
+```
+
+### Arguments
+
+<ParamField path="app" type="string">
+  Application name
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+### Example
+
+```bash
+$ convox apps lock
+Locking myapp... OK
+```
+
+<Note>
+  When locked, an application cannot be deleted until it is unlocked first.
+</Note>
+
+## apps unlock
+
+Disable termination protection.
+
+### Usage
+
+```bash
+convox apps unlock [app]
+```
+
+### Arguments
+
+<ParamField path="app" type="string">
+  Application name
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+### Example
+
+```bash
+$ convox apps unlock
+Unlocking myapp... OK
+```
+
+## apps params
+
+Display application parameters.
+
+### Usage
+
+```bash
+convox apps params [app]
+```
+
+### Arguments
+
+<ParamField path="app" type="string">
+  Application name
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+## apps params set
+
+Set application parameters.
+
+### Usage
+
+```bash
+convox apps params set <Key=Value> [Key=Value]...
+```
+
+### Arguments
+
+<ParamField path="Key=Value" type="string" required>
+  One or more parameter key-value pairs
+</ParamField>
+
+### Flags
+
+<ParamField path="--app" type="string">
+  Application name
+</ParamField>
+
+<ParamField path="--rack" type="string">
+  Rack name
+</ParamField>
+
+### Example
+
+```bash
+$ convox apps params set MaxCpu=2048 MaxMemory=4096
+Updating parameters
+...
+OK
+```

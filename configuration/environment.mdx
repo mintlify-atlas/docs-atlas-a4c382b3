@@ -1,0 +1,351 @@
+---
+title: "Environment Variables"
+description: "Manage application secrets and configuration with environment variables"
+---
+
+# Environment Variables
+
+Convox encourages the use of environment variables for managing application secrets and configuration. Using environment variables allows you to keep secrets out of your codebase and to have different configuration values for different deployments (staging and production).
+
+## Definition
+
+Environment variables are defined in [`convox.yml`](/configuration/convox-yml) at the application or service level.
+
+### Application Level
+
+Environment variables defined at the top level affect every service in the application.
+
+```yaml
+environment:
+  - ENCRYPTION_KEY
+services:
+  web:
+    environment:
+      - ALLOWED_IPS
+      - COOKIE_SECRET
+  worker:
+    environment:
+      - QUEUE
+```
+
+<Note>
+  The `ENCRYPTION_KEY` variable will be available to both `web` and `worker` services.
+</Note>
+
+This application would require four environment variables to be set: `ALLOWED_IPS`, `COOKIE_SECRET`, `ENCRYPTION_KEY`, and `QUEUE`.
+
+### Service Level
+
+Environment variables can be defined for each service individually.
+
+```yaml
+services:
+  web:
+    environment:
+      - ALLOWED_IPS
+      - COOKIE_SECRET
+  worker:
+    environment:
+      - QUEUE
+```
+
+<Warning>
+  Environment variables defined at the service level are only available to that specific service. The `web` service cannot access the `QUEUE` variable defined on `worker`.
+</Warning>
+
+### Default Values
+
+You can set a default value for any environment variable in the manifest:
+
+```yaml
+environment:
+  - QUEUE=main
+  - LOG_LEVEL=info
+  - API_TIMEOUT=30
+```
+
+<ParamField path="VARIABLE_NAME" type="string">
+  Variable without a default value - must be set before deployment
+</ParamField>
+
+<ParamField path="VARIABLE_NAME=value" type="string">
+  Variable with a default value - can be overridden at deployment
+</ParamField>
+
+### Interpolation
+
+You can use environment variables to add dynamic configuration to your `convox.yml`:
+
+```yaml
+services:
+  web:
+    domain: ${HOST}
+    health: ${HEALTH_CHECK_PATH}
+    scale:
+      count: ${SCALE_COUNT}
+```
+
+<Note>
+  Interpolated variables are resolved at build/deploy time, not at runtime. They must be set in your local environment when deploying.
+</Note>
+
+## Configuration
+
+You can set values for your environment variables using `convox env set`:
+
+<CodeGroup>
+```bash Set Multiple Variables
+$ convox env set ALLOWED_IPS=1.2.3.4 COOKIE_SECRET=foo QUEUE=main
+Setting ALLOWED_IPS, COOKIE_SECRET, QUEUE... OK
+Release: RABCDEFGHI
+```
+
+```bash Set Single Variable
+$ convox env set DATABASE_URL=postgres://localhost/mydb
+Setting DATABASE_URL... OK
+Release: RABCDEFGHI
+```
+</CodeGroup>
+
+<Warning>
+  Setting environment variables creates a new [Release](/reference/primitives/app/release). You must promote this release for the changes to take effect.
+</Warning>
+
+### Promoting a Release
+
+After setting environment variables, promote the new release:
+
+```bash
+$ convox releases promote RABCDEFGHIJ
+Promoting RABCDEFGHIJ... OK
+```
+
+## Managing Environment Variables
+
+<Tabs>
+  <Tab title="View">
+    View all environment variables for an app:
+    ```bash
+    $ convox env -a myapp
+    ALLOWED_IPS=1.2.3.4
+    COOKIE_SECRET=foo
+    QUEUE=main
+    ```
+  </Tab>
+  <Tab title="Set">
+    Set one or more environment variables:
+    ```bash
+    $ convox env set KEY=value ANOTHER_KEY=value -a myapp
+    Setting KEY, ANOTHER_KEY... OK
+    Release: RXYZ123
+    ```
+  </Tab>
+  <Tab title="Unset">
+    Remove environment variables:
+    ```bash
+    $ convox env unset LEGACY_MODE -a myapp
+    Unsetting LEGACY_MODE... OK
+    Release: RXYZ123
+    ```
+  </Tab>
+  <Tab title="Edit">
+    Edit environment variables interactively:
+    ```bash
+    $ convox env edit -a myapp
+    # Opens editor with current environment
+    Setting ... OK
+    Release: RXYZ123
+    ```
+  </Tab>
+</Tabs>
+
+## Release-Based Environment Management
+
+You can manage environment variables for a specific release using the `--release` flag. This is useful when multiple builds may occur between promotions.
+
+### View Release Environment
+
+```bash
+$ convox env -a myapp --release RXYZ123
+ALLOWED_IPS=1.2.3.4
+COOKIE_SECRET=foo
+QUEUE=main
+```
+
+### Set Release Environment
+
+```bash
+$ convox env set FEATURE_FLAG=true -a myapp --release RXYZ123
+Setting FEATURE_FLAG... OK
+Release: RXYZ123
+```
+
+### Unset Release Environment
+
+```bash
+$ convox env unset LEGACY_MODE -a myapp --release RXYZ123
+Unsetting LEGACY_MODE... OK
+Release: RXYZ123
+```
+
+### Edit Release Environment
+
+```bash
+$ convox env edit -a myapp --release RXYZ123
+Setting ... OK
+Release: RXYZ123
+```
+
+<Note>
+  Release-specific environment management ensures that environment changes are only applied to the intended release, preventing unintentional modifications to other releases.
+</Note>
+
+## System Variables
+
+The following environment variables are automatically set by Convox:
+
+<ParamField path="APP" type="string">
+  Name of the [App](/reference/primitives/app)
+</ParamField>
+
+<ParamField path="BUILD" type="string">
+  ID of the currently-promoted [Build](/reference/primitives/app/build)
+</ParamField>
+
+<ParamField path="BUILD_DESCRIPTION" type="string">
+  Description of the currently-promoted [Build](/reference/primitives/app/build)
+</ParamField>
+
+<ParamField path="PORT" type="number">
+  The value of the `port:` attribute for this [Service](/reference/primitives/app/service)
+</ParamField>
+
+<ParamField path="RACK" type="string">
+  The name of the [Rack](/reference/primitives/rack)
+</ParamField>
+
+<ParamField path="RELEASE" type="string">
+  ID of the currently-promoted [Release](/reference/primitives/app/release)
+</ParamField>
+
+<ParamField path="SERVICE" type="string">
+  Name of the [Service](/reference/primitives/app/service)
+</ParamField>
+
+### System Variable Example
+
+```bash
+# Inside a running container
+$ echo $APP
+myapp
+
+$ echo $SERVICE
+web
+
+$ echo $RACK
+production
+
+$ echo $RELEASE
+RABCDEFGHI
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Never Commit Secrets" icon="shield-halved">
+    Keep sensitive data out of your repository by using environment variables
+  </Card>
+  <Card title="Use Defaults Wisely" icon="circle-check">
+    Set sensible defaults for non-sensitive configuration
+  </Card>
+  <Card title="Document Variables" icon="book">
+    Maintain documentation of required environment variables
+  </Card>
+  <Card title="Environment-Specific Config" icon="layer-group">
+    Use different values for staging and production environments
+  </Card>
+</CardGroup>
+
+## Common Patterns
+
+### Database URLs
+
+```yaml
+resources:
+  database:
+    type: postgres
+services:
+  web:
+    resources:
+      - database
+```
+
+<Note>
+  When you link a resource, Convox automatically creates environment variables like `DATABASE_URL`, `DATABASE_HOST`, `DATABASE_PORT`, etc.
+</Note>
+
+### Feature Flags
+
+```yaml
+environment:
+  - FEATURE_NEW_UI=false
+  - FEATURE_BETA_API=false
+```
+
+```bash
+# Enable feature in production
+$ convox env set FEATURE_NEW_UI=true -a myapp -r production
+```
+
+### Environment-Specific Configuration
+
+```yaml
+environment:
+  - LOG_LEVEL=info
+  - API_TIMEOUT=30
+  - RATE_LIMIT=1000
+```
+
+```bash
+# Staging environment
+$ convox env set LOG_LEVEL=debug API_TIMEOUT=60 -a myapp -r staging
+
+# Production environment  
+$ convox env set LOG_LEVEL=warn API_TIMEOUT=30 RATE_LIMIT=10000 -a myapp -r production
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Environment variable not available">
+    Ensure the variable is:
+    1. Defined in `convox.yml` for the service
+    2. Set using `convox env set`
+    3. Promoted with `convox releases promote`
+  </Accordion>
+  
+  <Accordion title="Changes not taking effect">
+    After setting environment variables, you must promote the new release:
+    ```bash
+    $ convox releases promote <RELEASE_ID>
+    ```
+  </Accordion>
+  
+  <Accordion title="Interpolation not working">
+    Interpolated variables (e.g., `${HOST}`) must be set in your local environment when running `convox deploy`, not set with `convox env set`.
+  </Accordion>
+</AccordionGroup>
+
+## Related Documentation
+
+<CardGroup cols={3}>
+  <Card title="convox.yml" icon="file-code" href="/configuration/convox-yml">
+    Define environment variables in your manifest
+  </Card>
+  <Card title="Resources" icon="database" href="/reference/primitives/app/resource">
+    Auto-generated environment variables from resources
+  </Card>
+  <Card title="Releases" icon="code-branch" href="/reference/primitives/app/release">
+    Understanding the release and promotion workflow
+  </Card>
+</CardGroup>
