@@ -1,0 +1,164 @@
+{
+  "projectType": "infrastructure",
+  "projectName": "Convox",
+  "projectDescription": "Open-source multicloud Platform as a Service built on Kubernetes",
+  "theme": "aspen",
+  "primaryColor": "#343434",
+  "lightColor": "#73bbcc",
+  "darkColor": "#144c5d",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Installation",
+            "pages": [
+              "installation/overview",
+              "installation/cli",
+              "installation/development-rack",
+              "installation/production-rack"
+            ]
+          },
+          {
+            "group": "Cloud Providers",
+            "pages": [
+              "cloud/aws",
+              "cloud/gcp",
+              "cloud/azure",
+              "cloud/digital-ocean"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/convox-yml",
+              "configuration/environment",
+              "configuration/load-balancers",
+              "configuration/service-discovery",
+              "configuration/health-checks",
+              "configuration/volumes",
+              "configuration/rack-parameters",
+              "configuration/app-parameters"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/deploying-changes",
+              "deployment/ci-cd-workflows",
+              "deployment/rolling-updates",
+              "deployment/rollbacks",
+              "deployment/scaling",
+              "deployment/custom-domains",
+              "deployment/ssl"
+            ]
+          },
+          {
+            "group": "Management",
+            "pages": [
+              "management/run",
+              "management/logs",
+              "management/monitoring",
+              "management/troubleshooting"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Reference",
+        "groups": [
+          {
+            "group": "Primitives",
+            "pages": [
+              "reference/primitives/overview",
+              "reference/primitives/rack",
+              "reference/primitives/app"
+            ]
+          },
+          {
+            "group": "App Primitives",
+            "pages": [
+              "reference/primitives/service",
+              "reference/primitives/build",
+              "reference/primitives/release",
+              "reference/primitives/process",
+              "reference/primitives/resource",
+              "reference/primitives/balancer",
+              "reference/primitives/timer",
+              "reference/primitives/object"
+            ]
+          },
+          {
+            "group": "Resources",
+            "pages": [
+              "reference/resources/overview",
+              "reference/resources/postgres",
+              "reference/resources/mysql",
+              "reference/resources/redis",
+              "reference/resources/memcached",
+              "reference/resources/s3",
+              "reference/resources/sqs"
+            ]
+          },
+          {
+            "group": "CLI Reference",
+            "pages": [
+              "cli/overview",
+              "cli/apps",
+              "cli/build",
+              "cli/deploy",
+              "cli/env",
+              "cli/logs",
+              "cli/ps",
+              "cli/rack",
+              "cli/run",
+              "cli/scale",
+              "cli/services",
+              "cli/resources"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Multicloud Kubernetes-based PaaS",
+    "Infrastructure as code with Terraform",
+    "Automatic SSL and load balancing",
+    "Release and rollback management",
+    "Service discovery and networking",
+    "Managed resources (Postgres, Redis, etc.)",
+    "Autoscaling and health checks",
+    "CI/CD integration",
+    "Local development environment"
+  ],
+  "publicApiSurface": [
+    "convox apps",
+    "convox deploy",
+    "convox rack install",
+    "convox build",
+    "convox run",
+    "convox env",
+    "convox logs",
+    "convox ps",
+    "convox scale",
+    "convox resources",
+    "convox services",
+    "convox.yml manifest",
+    "Rack parameters",
+    "App parameters",
+    "Service primitives",
+    "Resource types",
+    "Timer/cron jobs",
+    "Load balancers"
+  ]
+}
